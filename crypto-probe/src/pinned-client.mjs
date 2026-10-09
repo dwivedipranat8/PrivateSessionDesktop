@@ -4,10 +4,12 @@ import {circuitRelayTransport} from '@libp2p/circuit-relay-v2';
 import {identify} from '@libp2p/identify';
 import {noise} from '@libp2p/noise';
 import {yamux} from '@libp2p/yamux';
-const PROTOCOL='/private-session/pinned-noise/1.0.0',FRAME_MAX=8192;
+import {lpStream} from '@libp2p/utils';
+const PROTOCOL='/private-session/pinned-noise/1.0.0',FRAME_MAX=98304,FRAME_VERSION=1;
 function goodId(id){return typeof id==='string'&&id.length>=20&&id.length<180&&/^[a-zA-Z0-9]+$/.test(id);}
 function validateFrame(frame){
- return frame&&typeof frame==='object'&&typeof frame.kind==='string'&&
+ return frame&&typeof frame==='object'&&frame.version===FRAME_VERSION&&
+   typeof frame.kind==='string'&&frame.kind.length>0&&frame.kind.length<64&&
    typeof frame.sessionId==='string'&&frame.sessionId.length>=12&&
    typeof frame.sender==='string'&&goodId(frame.sender)&&
    Number.isSafeInteger(frame.seq)&&frame.seq>=1;
@@ -30,27 +32,40 @@ export async function createPinnedClient({privateKey,sessionId,onFrame,onSession
   connectionEncrypters:[noise()],streamMuxers:[yamux()],
   services:{identify:identify()}
  });
- let approvedPeer=null,stream=null,ended=false,relayVerified=false,joinedRelayId=null;
+ let approvedPeer=null,stream=null,framed=null,writeQueue=Promise.resolve(),ended=false,relayVerified=false,joinedRelayId=null;
+ function rejectPeerConnection(streamInput,reason){
+  if(ended)return;
+  ended=true;
+  try{streamInput.abort(Error(reason));}catch{}
+  try{onSessionLost(reason);}catch{}
+ }
  function accept(streamInput,conn){
   if(ended||!approvedPeer||conn.remotePeer.toString()!==approvedPeer||stream){
    streamInput.abort(Error('Unapproved or duplicate peer stream'));return false;
   }
   stream=streamInput;
-  stream.addEventListener('message',e=>{
-   if(ended)return;
+  // Length-prefix messages independently of TCP/WebSocket/muxer chunks.
+  // The decoder refuses oversized frames before allocating their payload.
+  framed=lpStream(streamInput,{maxDataLength:FRAME_MAX,maxBufferSize:FRAME_MAX+256});
+  const sourcePeer=conn.remotePeer.toString();
+  (async()=>{
    try{
-    const bytes=e.data.subarray();
-    if(bytes.length===0||bytes.length>FRAME_MAX)throw Error('Encrypted frame too large');
-    const frame=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));
-    if(!validateFrame(frame)||frame.sessionId!==sessionId||frame.sender!==approvedPeer)
-      throw Error('Wrong session/identity');
-    // Only actual Noise-authenticated peer identity is passed to app.
-    onFrame(frame,{noiseRemotePeerId:conn.remotePeer.toString()});
+    while(!ended&&stream===streamInput){
+     const item=await framed.read();
+     if(ended)return;
+     const bytes=item.subarray();
+     if(bytes.length===0||bytes.length>FRAME_MAX)throw Error('Invalid encrypted frame length');
+     const frame=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));
+     if(!validateFrame(frame)||frame.sessionId!==sessionId||frame.sender!==sourcePeer)
+      throw Error('Unapproved version, peer or session');
+     // Await failure handlers. Never accept another frame after async denial.
+     await onFrame(frame,{noiseRemotePeerId:sourcePeer});
+     if(ended)return;
+    }
    }catch{
-    ended=true;onSessionLost('Malformed or unapproved encrypted frame');
-    try{streamInput.abort(Error('Invalid encrypted frame'));}catch{}
+    rejectPeerConnection(streamInput,'Encrypted frame stream ended or was invalid');
    }
-  });
+  })();
   return true;
  }
  await node.handle(PROTOCOL,(s,conn)=>{accept(s,conn);},{runOnLimitedConnection:true});
@@ -84,18 +99,31 @@ export async function createPinnedClient({privateKey,sessionId,onFrame,onSession
    if(!accept(outbound,conn))throw Error('Peer stream refused');
    return true;
   },
-  send(frame){
-   if(ended||!stream||!approvedPeer||!validateFrame(frame)||frame.sender!==node.peerId.toString()||
+  async send(frame){
+   if(ended||!stream||!framed||!approvedPeer||!frame||frame.sender!==node.peerId.toString()||
       frame.sessionId!==sessionId)return false;
-   const bytes=new TextEncoder().encode(JSON.stringify(frame));
-   if(bytes.length>FRAME_MAX)return false;
-   stream.send(bytes);return true;
+   const envelope={...frame,version:FRAME_VERSION};
+   if(!validateFrame(envelope))return false;
+   const bytes=new TextEncoder().encode(JSON.stringify(envelope));
+   if(bytes.length===0||bytes.length>FRAME_MAX)return false;
+   // Serialize writes and respect backpressure rather than assuming
+   // stream.send returned true or preserved application message boundaries.
+   const job=writeQueue.then(async()=>{
+    if(ended||!framed)throw Error('Encrypted stream closed');
+    await framed.write(bytes,{signal:AbortSignal.timeout(8000)});
+    return true;
+   });
+   writeQueue=job.catch(()=>{});
+   try{return await job;}catch{
+    if(stream)rejectPeerConnection(stream,'Encrypted stream write failed');
+    return false;
+   }
   },
   async end(){
    if(ended){await node.stop();return;}
    ended=true;
    try{await stream?.close();}catch{}
-   await node.stop();stream=null;
+   await node.stop();stream=null;framed=null;
   }
  });
 }

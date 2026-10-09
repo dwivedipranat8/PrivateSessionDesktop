@@ -34,14 +34,15 @@ test('two pinned, encrypted relay clients can exchange only session-bound dummy 
   }
   assert.ok(bAddr,'Receiver relay reservation not ready');
   await a.connect(bAddr);
-  const sent=a.send({kind:'text',seq:1,sessionId,sender:a.peerId,
+  const sent=await a.send({kind:'text',seq:1,sessionId,sender:a.peerId,
    messageId:'dummy_message_01234',text:'DUMMY CONTENT'});
   assert.equal(sent,true);
   for(let i=0;i<50&&received.length===0;i++)await delay(100);
   assert.equal(received.length,1);
   assert.equal(received[0].side,'b');
   assert.equal(received[0].frame.text,'DUMMY CONTENT');
+  assert.equal(received[0].frame.version,1);
   assert.equal(received[0].meta.noiseRemotePeerId,a.peerId);
-  assert.equal(a.send({kind:'text',seq:2,sessionId:'wrong_session',sender:a.peerId,text:'INVALID'}),false);
+  assert.equal(await a.send({kind:'text',seq:2,sessionId:'wrong_session',sender:a.peerId,text:'INVALID'}),false);
  }finally{await Promise.allSettled([a.end(),b.end(),relay.stop()]);}
 });
