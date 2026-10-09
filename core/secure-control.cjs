@@ -6,18 +6,18 @@
  */
 class SecureControl {
  constructor({sessionId,approvedRemoteDevice,hostDeviceId,localDeviceId,
-             onEnd=()=>{},onDelete=()=>{},onSeen=()=>{},onText=()=>{}}){
+             onEnd=()=>{},onDelete=()=>{},onSeen=()=>{},onText=()=>{},onSecurityFailure=()=>{}}){
   for(const value of [sessionId,approvedRemoteDevice,hostDeviceId,localDeviceId])
    if(typeof value!=='string'||value.length<8)throw Error('Enrolled identities/session required');
   if(approvedRemoteDevice===localDeviceId)throw Error('Self-peer forbidden');
-  Object.assign(this,{sessionId,approvedRemoteDevice,hostDeviceId,localDeviceId,onEnd,onDelete,onSeen,onText});
+  Object.assign(this,{sessionId,approvedRemoteDevice,hostDeviceId,localDeviceId,onEnd,onDelete,onSeen,onText,onSecurityFailure});
   this.lastSequence=0;this.ended=false;
  }
  receive(frame,{noiseRemoteDeviceId}={}){
   if(this.ended||noiseRemoteDeviceId!==this.approvedRemoteDevice||!frame||
     frame.sender!==noiseRemoteDeviceId||frame.sessionId!==this.sessionId||
     !Number.isSafeInteger(frame.seq)||frame.seq!==this.lastSequence+1)return false;
-  if(!['seen','delete','end','text'].includes(frame.kind))return false;
+  if(!['seen','delete','end','text','security_fail'].includes(frame.kind))return false;
   if(frame.kind==='delete'&&noiseRemoteDeviceId!==this.hostDeviceId)return false;
   if(frame.kind==='seen'&&(typeof frame.messageId!=='string'||frame.messageId.length<12))return false;
   if(frame.kind==='text'&&(typeof frame.messageId!=='string'||frame.messageId.length<12||
@@ -25,6 +25,7 @@ class SecureControl {
   this.lastSequence=frame.seq;
   if(frame.kind==='delete')this.onDelete();
   else if(frame.kind==='end'){this.ended=true;this.onEnd();}
+  else if(frame.kind==='security_fail'){this.ended=true;this.onSecurityFailure('Peer device security requirements not satisfied.');}
   else if(frame.kind==='seen')this.onSeen(frame.messageId);
   else if(frame.kind==='text')this.onText(frame.messageId,frame.text);
   return true;
