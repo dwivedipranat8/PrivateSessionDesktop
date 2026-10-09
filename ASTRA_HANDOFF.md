@@ -69,3 +69,6 @@ cannot be prevented by OS settings.
 - Distinguish code TESTED as isolated modules from actual GUI and Mac USB.
 - Output concise precise bug report + ordered next fixes + paste-back message.
 Do not merge PR #1 or claim app complete until all release gates are met.
+
+## User's final rules confirmed 2026-10-09
+120 seconds after first valid authenticated Seen event (not capped by unseen timer); 120 seconds if unseen; both Host and Protected may Clear & End. Clear locally immediately. Do not claim remotely confirmed deletion unless authenticated peer ACK arrives. Current GUI is ONLY a dummy preview. No real passwords/profiles generated. No universal screenshot or recording block is implemented; macOS consent-based restriction is an untested pilot. Source/tests changed on draft branch, latest state in SECURITY_STATUS.md.

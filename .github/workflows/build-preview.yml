@@ -29,7 +29,7 @@ jobs:
       - run: node --check app/preload.cjs
       - run: node --check ui/renderer.js
   windows:
-    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && inputs.verify_packages)
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && inputs.verify_packages) || (github.event_name == 'pull_request' && github.head_ref == 'development/security-engine')
     needs: test
     runs-on: windows-latest
     steps:
@@ -48,6 +48,14 @@ jobs:
           path: dist/*.exe
           if-no-files-found: error
           retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'pull_request' && github.head_ref == 'development/security-engine'
+        with:
+          name: Windows-Updated-Dummy-Preview-NOT-SECURE
+          path: dist/*.exe
+          if-no-files-found: error
+          retention-days: 7
+
   mac:
     if: github.event_name == 'workflow_dispatch' && (inputs.build_mac || inputs.verify_packages)
     needs: test
