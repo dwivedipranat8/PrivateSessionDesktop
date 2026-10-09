@@ -17,7 +17,7 @@ function stopMedia(){
  e('camera-view').pause();e('camera-view').srcObject=null;
  e('camera-view').style.display='none';e('no-camera').style.display='block';
  e('mic-level').style.width='0%';e('mic-state').textContent='OFF';
- e('sensor-status').textContent='Both required to start.';
+ e('sensor-status').textContent=role==='guest'?'Both required to start.':'Camera/mic optional for Host.';
 }
 function draw(){
  e('status').textContent=active?'Active':starting?'Preparing':'Inactive';
@@ -26,8 +26,8 @@ function draw(){
  e('start').disabled=active||starting;
  e('start').textContent=starting?'Checking devices…':'Start';
  for(const id of ['usb-btn','usb-clear','role'])e(id).disabled=active||starting;
- e('delete').hidden=role!=='host';
- e('delete').disabled=!active||role!=='host';
+ e('delete').hidden=false;
+ e('delete').disabled=!active;
 }
 function stop(reason){
  active=false;starting=false;attempt+=1;generation+=1;
@@ -66,23 +66,30 @@ async function start(){
  try{
   const allowed=await api.armMedia();
   if(!allowed.ok)throw Error(allowed.error||'Cannot start');
-  candidate=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
-  if(mine!==attempt){candidate.getTracks().forEach(t=>t.stop());return;}
-  if(!checkTracks(candidate))throw Error('Camera and microphone must both work');
+  if(role==='guest'){
+   candidate=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+   if(mine!==attempt){candidate.getTracks().forEach(t=>t.stop());return;}
+   if(!checkTracks(candidate))throw Error('Protected view requires camera and microphone');
+  }
   const begun=await api.start();
-  if(mine!==attempt){candidate.getTracks().forEach(t=>t.stop());await api.stop();return;}
+  if(mine!==attempt){candidate?.getTracks().forEach(t=>t.stop());await api.stop();return;}
   if(!begun.ok)throw Error(begun.error||'Cannot start');
   stream=candidate;candidate=null;active=true;starting=false;generation=begun.generation;
   clearMessages('Add a test message');draw();
-  e('camera-view').srcObject=stream;e('camera-view').style.display='block';
-  e('no-camera').style.display='none';
-  e('mic-state').textContent='ON';e('sensor-status').textContent='Camera + microphone active locally';
-  e('notice').textContent='Local preview — no remote connection';
-  for(const t of stream.getTracks()){
+  if(stream){
+   e('camera-view').srcObject=stream;e('camera-view').style.display='block';
+   e('no-camera').style.display='none';
+   e('mic-state').textContent='ON';
+   e('sensor-status').textContent='Camera + microphone active locally';
+   for(const t of stream.getTracks()){
     t.onended=()=>{if(active)requestStop('Required device disconnected',api.stop);};
     t.onmute=()=>{if(active)requestStop('Required device unavailable',api.stop);};
+   }
+   setupMicrophoneMeter(stream);
+  }else{
+   e('sensor-status').textContent='Host: no camera/microphone required for this demo';
   }
-  setupMicrophoneMeter(stream);
+  e('notice').textContent='Local preview — no remote connection';
  }catch(err){
   if(candidate)candidate.getTracks().forEach(t=>t.stop());
   if(mine===attempt){starting=false;draw();e('notice').textContent='Cannot start: '+(err?.message||'Check permissions');}
@@ -98,7 +105,7 @@ function addMessage(){
  const foot=document.createElement('div');foot.className='bubble-foot';
  const seen=document.createElement('button');seen.className='seen';
  seen.textContent='Simulate Seen';
- const hint=document.createElement('small');hint.textContent='20s if unread';
+ const hint=document.createElement('small');hint.textContent='120s if unread';
  item.append(text);foot.append(seen,hint);item.append(foot);e('messages').append(item);
  messages.add(item);
  let timer=null;
@@ -117,20 +124,20 @@ function addMessage(){
  };
  seen.onclick=()=>{
    if(!active||generation!==ownerGeneration||!policy.markSeen(performance.now()))return;
-   seen.remove();hint.textContent='Seen · disappears in 2s';plan();
+   seen.remove();hint.textContent='Seen · disappears in 120s';plan();
  };
  plan();
 }
-async function deleteChat(){
- if(!active||role!=='host')return;
- const result=await api.deleteChat();
- if(result.ok&&active&&role==='host'){clearMessages('Chat deleted');e('notice').textContent='Demo chat cleared on this device';}
+async function clearAndEnd(){
+ if(!active)return;
+ // Locally cover content and stop sensors BEFORE a remote or main-process call.
+ await requestStop('Chat cleared and ended on this device (local demo only)',api.clearEnd);
 }
 e('start').onclick=start;
 e('end').onclick=()=>requestStop('Ended',api.stop);
 e('fail').onclick=()=>requestStop('Simulated failure',api.fail);
 e('message-btn').onclick=addMessage;
-e('delete').onclick=deleteChat;
+e('delete').onclick=clearAndEnd;
 e('role').onchange=async()=>{
  const next=e('role').value;
  try{

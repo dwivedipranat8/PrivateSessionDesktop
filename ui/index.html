@@ -12,14 +12,14 @@
 <p class="soft">Preview 0.2</p>
 <div class="warning">LOCAL DEMO — not an encrypted messenger</div>
 <label for="role">Demo view</label>
-<select id="role"><option value="host">Host</option><option value="guest">Guest</option></select>
-<p class="soft tiny">Roles are simulated here.</p>
+<select id="role"><option value="host">Host</option><option value="guest">Protected</option></select>
+<p class="soft tiny">Roles simulated. No real peer connection or password login.</p>
 </aside>
 <main>
-<header><div><h1>Private conversation</h1><p>Camera and microphone required</p></div><span id="status">Inactive</span></header>
+<header><div><h1>Private conversation</h1><p>Protected: camera and mic required · Host: optional</p></div><span id="status">Inactive</span></header>
 <div class="grid">
 <section class="panel grow">
-<div class="panel-top"><div><h3>Chat</h3><p class="soft">Seen + 2 seconds</p></div><button id="delete" class="subtle danger" hidden disabled>Delete chat</button></div>
+<div class="panel-top"><div><h3>Chat</h3><p class="soft">Seen + 120 seconds</p></div><button id="delete" class="subtle danger" hidden disabled>Clear &amp; End</button></div>
 <div id="messages"><p class="empty">Press Start to begin.</p></div>
 <button id="message-btn" disabled>Add test message</button>
 </section>

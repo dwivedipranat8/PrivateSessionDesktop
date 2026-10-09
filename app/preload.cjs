@@ -9,6 +9,6 @@ contextBridge.exposeInMainWorld('preview',Object.freeze({
  folder:()=>ipcRenderer.invoke('p:folder'),
  clearFolder:()=>ipcRenderer.invoke('p:clear-folder'),
  setRole:role=>ipcRenderer.invoke('p:set-role',role),
- deleteChat:()=>ipcRenderer.invoke('p:delete-chat'),
+ clearEnd:()=>ipcRenderer.invoke('p:clear-end'),
  onStop:fn=>{if(typeof fn==='function')ipcRenderer.on('p:stopped',(_e,data)=>fn(data));}
 }));

@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "license": "UNLICENSED",
-  "description": "Consent-first local demo with read timer and host-only demo clearing",
+  "description": "Local dummy preview with 120-second expiry and bilateral Clear & End",
   "main": "app/main.cjs",
   "scripts": {
     "start": "electron .",

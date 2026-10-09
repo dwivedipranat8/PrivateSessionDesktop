@@ -49,7 +49,7 @@ app.whenReady().then(()=>{
  register('start',()=>{
    if(process.platform==='win32' && !win?.isContentProtected())return {ok:false,error:'Window capture exclusion unavailable'};
    if(demo.active)return {ok:false,error:'Session already active'};
-   if(Date.now()>=mediaDeadline)return {ok:false,error:'Camera and microphone are required'};
+   if(role==='guest'&&Date.now()>=mediaDeadline)return {ok:false,error:'Protected view requires camera and microphone'};
    const check=guardReady();if(!check.ok){mediaDeadline=0;return check;}
    const r=demo.start();mediaDeadline=0;return r;
  });
@@ -59,8 +59,10 @@ app.whenReady().then(()=>{
    if(demo.active||!['host','guest'].includes(next))return {ok:false};
    role=next;return {ok:true,role};
  });
- register('delete-chat',()=>{
-   if(!demo.active||role!=='host')return {ok:false,error:'Only the host can clear the demo'};
+ register('clear-end',()=>{
+   if(!demo.active)return {ok:false,error:'No active demo session'};
+   // Both roles may Clear & End. This preview has no remote peer to notify.
+   stop('Cleared & ended locally (dummy preview only)');
    return {ok:true};
  });
  register('folder',async()=>{
