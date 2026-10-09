@@ -12,5 +12,12 @@ contextBridge.exposeInMainWorld('preview',Object.freeze({
  accountUnlock:passphrase=>ipcRenderer.invoke('p:account-unlock',passphrase),
  accountLock:()=>ipcRenderer.invoke('p:account-lock'),
  clearEnd:()=>ipcRenderer.invoke('p:clear-end'),
+ peerPrepare:config=>ipcRenderer.invoke('p:peer-prepare',config),
+ peerConnect:address=>ipcRenderer.invoke('p:peer-connect',address),
+ peerSend:text=>ipcRenderer.invoke('p:peer-send',text),
+ peerSeen:id=>ipcRenderer.invoke('p:peer-seen',id),
+ peerClear:()=>ipcRenderer.invoke('p:peer-clear'),
+ peerTurn:()=>ipcRenderer.invoke('p:peer-turn'),
+ onPeerEvent:fn=>{if(typeof fn==='function')ipcRenderer.on('p:peer-event',(_e,data)=>fn(data));},
  onStop:fn=>{if(typeof fn==='function')ipcRenderer.on('p:stopped',(_e,data)=>fn(data));}
 }));

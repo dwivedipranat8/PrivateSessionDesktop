@@ -5,7 +5,7 @@ const {pathToFileURL}=require('node:url');
 const {DemoSession}=require('../core/session.cjs');
 const demo=new DemoSession();
 let win=null,folder=null,role=null,profile=null,profileFileSignature=null,mediaDeadline=0,interval=null,lastUnlockAttempt=0,authEpoch=0;
-let modulePromise=null;
+let modulePromise=null,liveChat=null,connectingPeer=false;
 function profileLibrary(){
  if(!modulePromise)modulePromise=import(pathToFileURL(path.join(__dirname,'../crypto-probe/src/local-profiles.mjs')).href);
  return modulePromise;
@@ -152,6 +152,67 @@ app.whenReady().then(()=>{
  });
  register('stop',()=>stop('Ended locally'));
  register('fail',()=>stop('Simulated failure'));
+ register('peer-prepare',async(config)=>{
+   if(!demo.active||!profile||liveChat||connectingPeer||
+      !config||typeof config!=='object')return {ok:false,error:'Unlock and start a new session first'};
+   if(role==='guest'&&process.platform==='darwin')
+    return {ok:false,error:'Mac protected capture restriction not independently verified'};
+   const epoch=authEpoch;
+   connectingPeer=true;
+   let candidate=null;
+   try{
+    const {createDesktopChat}=await import(pathToFileURL(path.join(__dirname,'../crypto-probe/src/desktop-chat.mjs')).href);
+    if(epoch!==authEpoch)throw Error('Session was cancelled');
+    candidate=await createDesktopChat({
+     privateKeyBytes:profile.identity.privateKeyBytes,
+     role:role==='guest'?'protected':'host',
+     relayAddress:config.relayAddress,relayPeerId:config.relayPeerId,
+     approvedPeerId:config.peerId,sessionId:config.sessionId,
+     onEvent:info=>{
+      if(epoch!==authEpoch)return;
+      if(win&&!win.isDestroyed())win.webContents.send('p:peer-event',info);
+      if(info.type==='closed'&&liveChat===candidate)
+       emergencyQuit('Approved peer connection ended');
+     }
+    });
+    if(epoch!==authEpoch||!demo.active){await candidate.close();throw Error('Session cancelled');}
+    liveChat=candidate;
+    return {ok:true,localPeerId:candidate.localPeerId,addresses:candidate.ownCircuitAddresses};
+   }catch(error){
+    if(candidate)await candidate.close().catch(()=>{});
+    return {ok:false,error:error?.message||'Authenticated relay unavailable'};
+   }finally{connectingPeer=false;}
+ });
+ register('peer-connect',async(circuitAddress)=>{
+   if(!demo.active||!liveChat)return {ok:false,error:'No approved encrypted peer'};
+   try{await liveChat.connect(circuitAddress);return {ok:true};}
+   catch{return {ok:false,error:'Approved peer connection refused'};}
+ });
+ register('peer-send',async(text)=>{
+   if(!demo.active||!liveChat?.connected)return {ok:false,error:'Peer proof unavailable'};
+   try{return {ok:true,...await liveChat.sendText(text)};}
+   catch{return {ok:false,error:'Encrypted message was not delivered'};}
+ });
+ register('peer-seen',async(id)=>{
+   if(!demo.active||!liveChat?.connected)return {ok:false};
+   try{return {ok:await liveChat.reportDisplayed(id)};}
+   catch{return {ok:false};}
+ });
+ register('peer-clear',async()=>{
+   if(!demo.active)return {ok:false};
+   // Cover the window and wipe the renderer BEFORE network acknowledgement.
+   if(win&&!win.isDestroyed())win.hide();
+   const selected=liveChat;liveChat=null;
+   let result={localCleared:true,peerDeliveryAttempted:false,peerConfirmed:false};
+   try{if(selected)result=await selected.clearAndEnd();}
+   finally{stop('Cleared and ended');}
+   return result;
+ });
+ register('peer-turn',async()=>{
+   if(!demo.active||!liveChat?.connected)return {ok:false,error:'No active authorized peer'};
+   try{return {ok:true,...await liveChat.getTurnConfig()};}
+   catch{return {ok:false,error:'Temporary encrypted relay media credentials unavailable'};}
+ });
  register('clear-end',()=>{
    if(!demo.active)return {ok:false,error:'No active demo session'};
    // Both roles may Clear & End. This preview has no remote peer to notify.

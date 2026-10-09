@@ -74,3 +74,12 @@ test('network loss closes an unlocked app even before Start',()=>{
  assert.match(code,/if\(profile&&!net\.isOnline\(\)\)/);
  assert.match(code,/emergencyQuit\('Network unavailable'\)/);
 });
+
+test('all real peer operations stay in main process and require authorized session',()=>{
+ const app=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
+ for(const key of ['peer-prepare','peer-connect','peer-send','peer-seen','peer-clear','peer-turn'])
+  assert.match(app,new RegExp("register\\('"+key+"'"));
+ assert.match(app,/privateKeyBytes:profile\.identity\.privateKeyBytes/);
+ assert.match(app,/Mac protected capture restriction not independently verified/);
+ assert.match(app,/epoch!==authEpoch/);
+});
