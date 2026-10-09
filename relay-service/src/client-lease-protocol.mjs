@@ -7,7 +7,7 @@ const LEASE_PROTOCOL='/private-session/account-lease/1.0.0';
  * Account passphrase remains local and is never sent to the relay.
  */
 export function makePinnedLeaseRequest({node,serverAddress,expectedServerPeerId,timeoutMs=8000}={}){
- if(!node||typeof serverAddress!=='string'||!serverAddress||
+ if(!node||typeof serverAddress?.getComponents!=='function'||
     typeof expectedServerPeerId!=='string'||expectedServerPeerId.length<20||
     !Number.isInteger(timeoutMs)||timeoutMs<1000||timeoutMs>15000)
   throw Error('Pinned relay public identity required');

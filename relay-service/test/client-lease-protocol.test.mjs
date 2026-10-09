@@ -16,7 +16,7 @@ test('true pinned encrypted relay server grants one active device per account',{
  try{
   server=await createPrivateRelay({privateKey:await generateKeyPair('Ed25519'),
    enrolled,issuer:async()=>({iceServers:[]}),host:'127.0.0.1',port:0});
-  const serverAddress=server.getMultiaddrs()[0].toString();
+  const serverAddress=server.getMultiaddrs()[0];
   const config={serverAddress,expectedServerPeerId:server.peerId.toString()};
   const first=makePinnedLeaseRequest({node:host,...config});
   const second=makePinnedLeaseRequest({node:otherHost,...config});
@@ -36,8 +36,8 @@ test('true pinned encrypted relay server grants one active device per account',{
  }finally{await Promise.allSettled([host.stop(),otherHost.stop(),server?.stop()]);}
 });
 test('pinning and protocol forbid password-based remote login',()=>{
- assert.throws(()=>makePinnedLeaseRequest({node:{},serverAddress:'x',expectedServerPeerId:'bad'}));
- const request=makePinnedLeaseRequest({node:{},serverAddress:'x',
+ assert.throws(()=>makePinnedLeaseRequest({node:{},serverAddress:{getComponents(){}},expectedServerPeerId:'bad'}));
+ const request=makePinnedLeaseRequest({node:{},serverAddress:{getComponents(){}},
   expectedServerPeerId:'12D3KooWAAAAAAAAAAAAAAAAAAAAAAAAA'});
  return assert.rejects(request({operation:'login',password:'stolen-password'}));
 });
