@@ -1,167 +1,248 @@
 'use strict';
-const api=window.preview,e=id=>document.getElementById(id);
-let active=false,starting=false,role=null,unlocked=false,attempt=0,generation=0,stream=null;
-const messages=new Map();
-let messageTimer=null;
-function showGate(message=''){
- unlocked=false;active=false;starting=false;role=null;
+const api=window.preview;
+const e=id=>document.getElementById(id);
+let unlocked=false,role=null,active=false,starting=false,sessionGeneration=0,nonce=0;
+let stream=null,rtc=null,chatReady=false,peerPrepared=false,rtcStarted=false;
+const pendingRtc=[],messages=new Map(),seenQueued=new Set();
+function clearMessages(label=''){
+ messages.clear();seenQueued.clear();e('messages').replaceChildren();
+ if(label){const node=document.createElement('p');node.className='empty';node.textContent=label;e('messages').append(node);}
+}
+function stopMedia(){
+ if(rtc){try{rtc.end('Session closed');}catch{}rtc=null;}
+ const media=stream;stream=null;
+ for(const track of media?.getTracks?.()||[]){
+  try{track.onended=null;track.onmute=null;track.stop();}catch{}
+ }
+ e('media-indicator').textContent='Camera and microphone off';
+ e('remote-video').srcObject=null;e('call-status').textContent='Call ended';
+ rtcStarted=false;pendingRtc.length=0;
+}
+function draw(){
+ e('status').textContent=chatReady?'Verified & encrypted':active?'Waiting for peer':'Inactive';
+ e('status').className=chatReady?'live':'';
+ e('start').disabled=!unlocked||active||starting;
+ e('lock').disabled=active||starting;
+ e('end').disabled=!active;
+ e('delete').disabled=!active;
+ e('prepare-peer').disabled=!active||peerPrepared;
+ e('connect-peer').disabled=!peerPrepared;
+ e('message-compose').disabled=!chatReady;
+ e('send-peer').disabled=!chatReady;
+}
+function gate(reason=''){
+ nonce++;unlocked=false;active=false;starting=false;peerPrepared=false;chatReady=false;
+ clearMessages('No messages');stopMedia();draw();role=null;
  e('account-gate').hidden=false;e('app-shell').hidden=true;
- e('account-error').textContent=message;
+ e('account-error').textContent=reason;
  e('passphrase').value='';
 }
-function showApp(info){
- unlocked=true;role=info.role;
- e('account-gate').hidden=true;e('app-shell').hidden=false;
- e('drive-status').textContent=role==='guest'
-   ?'External-drive profile location required for this preview; actual removable-drive verification is pending.'
-   :'This device: encrypted local profile';
- e('media-indicator').textContent='Camera and microphone off';
- clearMessages('Start to test message expiry.');draw();
+async function gateStatus(){
+ const state=await api.accountStatus();
+ e('account-form').hidden=false;e('unlock').hidden=!state.registered;
+ e('initial-setup').hidden=!!state.registered;
 }
-async function updateGate(){
- try{
-  const state=await api.accountStatus();
-  e('initial-setup').hidden=!!state.registered;
-  e('account-form').hidden=false;
-  e('unlock').hidden=!state.registered;
- }catch{e('account-error').textContent='Account service unavailable';}
+async function openAccount(info){
+ unlocked=true;role=info.role;active=false;peerPrepared=false;chatReady=false;
+ e('account-gate').hidden=true;e('app-shell').hidden=false;
+ e('host-capture-row').hidden=role!=='host';
+ clearMessages('Unlock complete. Start and connect to the approved peer.');
+ e('media-indicator').textContent='Camera and microphone off';
+ draw();
+ const id=await api.myPeerId();
+ e('my-peer-id').textContent=id.ok?id.peerId:'Identity unavailable';
 }
 async function unlock(){
  const password=e('passphrase').value;
  e('passphrase').value='';
- if(!password)return;
- try{
-  const result=await api.accountUnlock(password);
-  if(!result.ok)throw Error(result.error||'Could not unlock');
-  showApp(result);
- }catch(err){e('account-error').textContent=err?.message||'Could not unlock';}
+ const result=await api.accountUnlock(password);
+ if(result.ok)await openAccount(result);
+ else e('account-error').textContent=result.error||'Password incorrect';
 }
 async function setup(location){
  const password=e('passphrase').value;
  e('passphrase').value='';
- if(password.length<16){e('account-error').textContent='Choose a password of at least 16 characters';return;}
- try{
-  const result=await api.accountSetup(location,password);
-  if(!result.ok)throw Error(result.error||'Cannot create encrypted profile');
-  showApp(result);
- }catch(err){e('account-error').textContent=err?.message||'Profile setup failed';await updateGate();}
+ const result=await api.accountSetup(location,password);
+ if(result.ok)await openAccount(result);
+ else{e('account-error').textContent=result.error||'Setup refused';await gateStatus();}
 }
-function clearMessages(label){
- messages.clear();
- e('messages').replaceChildren();
- if(label){const p=document.createElement('p');p.className='empty';p.textContent=label;e('messages').append(p);}
-}
-function stopMedia(){
- const owned=stream;stream=null;
- if(owned){for(const track of owned.getTracks()){try{track.onended=null;track.onmute=null;track.stop();}catch{}}}
- e('media-indicator').textContent='Camera and microphone off';
-}
-function draw(){
- e('status').textContent=active?'Active':starting?'Preparing':'Inactive';
- e('status').className=active?'live':'';
- for(const id of ['end','fail','message-btn','delete'])e(id).disabled=!active;
- e('start').disabled=!unlocked||active||starting;
- e('start').textContent=starting?'Checking permissions…':'Start local test';
- e('lock').disabled=active||starting;
-}
-function stop(reason){
- active=false;starting=false;attempt++;generation++;
- clearMessages('Session ended');stopMedia();draw();
- e('notice').textContent=reason||'Ended';
- showGate(reason||'Unlock again to continue');
- updateGate();
-}
-async function requestStop(reason,handler){
- if(!unlocked)return;
- stop(reason);
- try{await handler();}catch{}
-}
-function goodTracks(s){
- return s&&s.getVideoTracks().some(t=>t.readyState==='live'&&!t.muted)&&
- s.getAudioTracks().some(t=>t.readyState==='live'&&!t.muted);
+function healthyMedia(s){
+ return s?.getVideoTracks().some(x=>x.readyState==='live'&&!x.muted)&&
+        s?.getAudioTracks().some(x=>x.readyState==='live'&&!x.muted);
 }
 async function start(){
- if(!unlocked||active||starting)return;
- const nonce=++attempt;starting=true;draw();
- e('notice').textContent='Preparing local test session';
- let acquired=null;
+ if(!unlocked||starting||active)return;
+ const attempt=++nonce;starting=true;draw();
+ let candidate=null;
  try{
   const arm=await api.armMedia();
-  if(!arm.ok)throw Error(arm.error||'Cannot start');
-  if(role==='guest'){
-   e('notice').textContent='Camera and microphone permission required';
-   acquired=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
-   if(nonce!==attempt){acquired.getTracks().forEach(t=>t.stop());return;}
-   if(!goodTracks(acquired))throw Error('Both camera and microphone must be active');
+  if(!arm.ok)throw Error(arm.error||'Authorization unavailable');
+  if(role==='protected'||role==='guest'||(role==='host'&&e('host-share').checked)){
+   candidate=await navigator.mediaDevices.getUserMedia({audio:true,video:true});
+   if(attempt!==nonce){candidate.getTracks().forEach(x=>x.stop());return;}
+   if(!healthyMedia(candidate))throw Error('Camera and microphone unavailable');
   }
-  const began=await api.start();
-  if(nonce!==attempt){acquired?.getTracks().forEach(t=>t.stop());await api.stop();return;}
-  if(!began.ok)throw Error(began.error||'Start refused');
-  stream=acquired;acquired=null;active=true;starting=false;generation=began.generation;
-  clearMessages('Add a dummy message');draw();
+  const begun=await api.start();
+  if(attempt!==nonce){candidate?.getTracks().forEach(x=>x.stop());await api.stop();return;}
+  if(!begun.ok)throw Error(begun.error||'Start blocked');
+  active=true;starting=false;sessionGeneration=begun.generation;stream=candidate;candidate=null;
   if(stream){
-   // Deliberately NO self-preview or microphone-level panel.
-   // Keep a clear indicator that the camera and microphone are active.
    e('media-indicator').textContent='Camera and microphone active';
-   for(const t of stream.getTracks()){
-    t.onended=()=>{if(active)requestStop('Required media device removed',api.stop);};
-    t.onmute=()=>{if(active)requestStop('Camera/microphone unavailable',api.stop);};
+   for(const track of stream.getTracks()){
+    track.onended=()=>terminate('Media device disconnected',api.stop);
+    track.onmute=()=>terminate('Media device unavailable',api.stop);
    }
   }
-  e('notice').textContent='Local-only demo; no remote peer is connected';
+  e('notice').textContent='Enter pinned relay and peer details in Connection setup';
+  draw();
  }catch(err){
-  if(acquired)for(const t of acquired.getTracks()){try{t.stop();}catch{}}
-  if(nonce===attempt){
-   starting=false;draw();e('notice').textContent='Cannot start: '+(err?.message||'Permission failure');
-  }
+  for(const t of candidate?.getTracks?.()||[])t.stop();
+  if(attempt===nonce){starting=false;draw();e('notice').textContent=err?.message||'Start failed';}
  }
+}
+async function terminate(message,fn=api.stop){
+ if(!unlocked)return;
+ gate(message);
+ try{await fn();}catch{}
+ await gateStatus().catch(()=>{});
+}
+function renderBubble(id,text,{outgoing=false}={}){
+ if(!active||messages.has(id))return;
+ if(e('messages').querySelector('.empty'))e('messages').replaceChildren();
+ const bubble=document.createElement('article');
+ bubble.className='bubble'+(outgoing?' outgoing':'');
+ bubble.dataset.messageId=id;
+ const content=document.createElement('span');content.textContent=text;
+ const foot=document.createElement('div');foot.className='bubble-foot';
+ bubble.append(content,foot);e('messages').append(bubble);
+ messages.set(id,{bubble,foot,policy:new window.MessagePolicy(performance.now()),outgoing});
+ e('messages').scrollTop=e('messages').scrollHeight;
+ if(!outgoing)void reportSeenIfVisible(id);
+}
+async function reportSeenIfVisible(id){
+ if(!chatReady||!messages.has(id)||seenQueued.has(id)||
+   document.visibilityState!=='visible'||!document.hasFocus())return;
+ const entry=messages.get(id);
+ if(entry.outgoing||entry.policy.seenAt!==null)return;
+ seenQueued.add(id);
+ const proof=await api.peerSeen(id);
+ if(!messages.has(id))return;
+ if(proof.ok)entry.policy.markSeen(performance.now());
+ else seenQueued.delete(id);
 }
 function updateMessages(){
  if(!active)return;
- const now=performance.now();
- for(const [element,item] of messages){
-  if(now>=item.policy.expiresAt()){
-   messages.delete(element);element.remove();
-   continue;
+ for(const [id,entry] of messages){
+  const policy=entry.policy;
+  if(performance.now()>=policy.expiresAt()){
+   entry.bubble.remove();messages.delete(id);continue;
   }
-  item.hint.textContent=(item.policy.seenAt===null?'Unseen':'Seen')+
-    ' · deletes in '+Math.ceil((item.policy.expiresAt()-now)/1000)+'s (simulated)';
+  entry.foot.textContent=(policy.seenAt===null?'Unseen':'Seen')+
+   ' · erase in '+Math.ceil((policy.expiresAt()-performance.now())/1000)+'s';
  }
 }
-function addMessage(){
- if(!active)return;
- if(e('messages').querySelector('.empty'))e('messages').replaceChildren();
- const policy=new window.MessagePolicy(performance.now());
- const element=document.createElement('div');element.className='bubble';
- const text=document.createElement('span');text.textContent='Dummy message — not sent to a remote device';
- const foot=document.createElement('div');foot.className='bubble-foot';
- const seen=document.createElement('button');seen.className='seen';
- seen.textContent='Simulate recipient Seen';
- const hint=document.createElement('small');
- foot.append(seen,hint);element.append(text,foot);e('messages').append(element);
- messages.set(element,{policy,hint});
- seen.onclick=()=>{
-  if(!active||!messages.has(element)||!policy.markSeen(performance.now()))return;
-  seen.remove();updateMessages();
- };
- updateMessages();
+async function sendText(){
+ if(!chatReady)return;
+ const text=e('message-compose').value.trim();
+ if(!text||text.length>2048)return;
+ e('message-compose').value='';
+ const result=await api.peerSend(text);
+ if(result.ok)renderBubble(result.id,text,{outgoing:true});
+ else e('notice').textContent=result.error||'Delivery not confirmed';
+}
+async function peerPrepare(){
+ if(!active||peerPrepared)return;
+ const config={relayAddress:e('relay-address').value.trim(),
+  relayPeerId:e('relay-peer').value.trim(),peerId:e('peer-id').value.trim(),
+  sessionId:e('session-id').value.trim()};
+ e('prepare-peer').disabled=true;e('notice').textContent='Authenticating pinned relay and account…';
+ try{
+  const result=await api.peerPrepare(config);
+  if(!result.ok)throw Error(result.error||'Connection refused');
+  peerPrepared=true;
+  e('own-circuit').value=result.addresses?.[0]||'No relay reservation yet; verify server configuration';
+  e('notice').textContent='Share verified relay address with the approved peer';
+ }catch(err){e('notice').textContent=err?.message||'Relay setup failed';}
+ draw();
+}
+async function peerConnect(){
+ if(!peerPrepared)return;
+ const result=await api.peerConnect(e('remote-circuit').value.trim());
+ e('notice').textContent=result.ok?'Waiting for authenticated heartbeat proof…':'Peer connection refused';
+}
+function handlePeerEvent(event){
+ if(!unlocked||!active||!event||typeof event!=='object')return;
+ if(event.type==='peer-connected'){e('notice').textContent='Peer transport established; proving liveness…';}
+ if(event.type==='ready'){
+  chatReady=true;draw();
+  e('notice').textContent='Authenticated encrypted connection (experimental)';
+  void setupRtc();
+ }
+ if(event.type==='incoming')renderBubble(event.id,event.text);
+ if(event.type==='seen'){
+  const item=messages.get(event.id);
+  if(item?.outgoing)item.policy.markSeen(performance.now());
+ }
+ if(event.type==='expired'){
+  const item=messages.get(event.id);item?.bubble.remove();messages.delete(event.id);
+ }
+ if(event.type==='rtc-signal')void acceptRtcSignal(event.frame);
+ if(event.type==='conceal'){clearMessages('Session verification delayed');chatReady=false;draw();}
+ if(event.type==='cleared'){clearMessages('Session cleared');chatReady=false;draw();}
+ if(event.type==='closed')void terminate('Authenticated session ended',api.stop);
+}
+async function setupRtc(){
+ if(!chatReady||rtcStarted||!window.RTCCall)return;
+ rtcStarted=true;
+ try{
+  const cfg=await api.peerTurn();
+  if(!cfg.ok)throw Error('Authenticated media relay unavailable');
+  rtc=new window.RTCCall({
+   sessionId:e('session-id').value.trim(),localDeviceId:e('my-peer-id').textContent,
+   peerDeviceId:e('peer-id').value.trim(),role:role==='guest'?'protected':'host',
+   sendAuthenticated:async frame=>(await api.peerRtc(frame)).ok===true,
+   onRemoteMedia:streams=>{
+    e('remote-video').srcObject=streams?.[0]||null;
+    if(streams?.[0])e('remote-video').play().catch(()=>{});
+   },onStop:()=>{e('call-status').textContent='Encrypted video call ended';}
+  });
+  await rtc.prepare({localStream:stream,iceServers:cfg.iceServers,initiator:role==='host'});
+  e('call-status').textContent='Call negotiation in progress (TURN-only, DTLS-SRTP)';
+  for(const frame of pendingRtc.splice(0))await rtc.acceptSignal(frame,{fromAuthenticatedPinnedNoisePeer:true});
+ }catch(err){
+  e('call-status').textContent=err?.message||'Encrypted media unavailable';
+  rtc?.end('Setup failed');rtc=null;
+ }
+}
+async function acceptRtcSignal(frame){
+ if(!rtc){if(pendingRtc.length<32)pendingRtc.push(frame);else await terminate('Media signalling overflow');return;}
+ const success=await rtc.acceptSignal(frame,{fromAuthenticatedPinnedNoisePeer:true});
+ if(!success)await terminate('Authenticated call signalling rejected');
 }
 async function clearAndEnd(){
  if(!active)return;
- await requestStop('Chat cleared and ended locally (demo only)',api.clearEnd);
+ // The renderer clears displayed sensitive content synchronously.
+ clearMessages('Conversation cleared');stopMedia();chatReady=false;draw();
+ await terminate('Cleared & ended',api.peerClear);
 }
-e('account-form').addEventListener('submit',event=>{event.preventDefault();unlock();});
-e('setup-local').onclick=()=>setup('local');
-e('setup-portable').onclick=()=>setup('portable');
-e('start').onclick=start;
-e('end').onclick=()=>requestStop('Session ended',api.stop);
-e('fail').onclick=()=>requestStop('Simulated failure',api.fail);
-e('message-btn').onclick=addMessage;
-e('delete').onclick=clearAndEnd;
-e('lock').onclick=()=>requestStop('Account locked',api.accountLock);
-api.onStop(s=>stop(s.reason));
-messageTimer=setInterval(updateMessages,250);
-api.status().then(state=>{
- if(state.unlocked){showApp(state);}
- else{showGate('Enter your password');updateGate();}
-}).catch(()=>showGate('Application could not load encrypted profiles'));
+e('account-form').addEventListener('submit',event=>{event.preventDefault();void unlock();});
+e('setup-local').onclick=()=>void setup('local');
+e('setup-portable').onclick=()=>void setup('portable');
+e('start').onclick=()=>void start();
+e('lock').onclick=()=>void terminate('Account locked',api.accountLock);
+e('end').onclick=()=>void terminate('Session ended',api.stop);
+e('delete').onclick=()=>void clearAndEnd();
+e('generate-session').onclick=()=>e('session-id').value=Array.from(crypto.getRandomValues(new Uint8Array(24)),b=>b.toString(16).padStart(2,'0')).join('');
+e('prepare-peer').onclick=()=>void peerPrepare();
+e('connect-peer').onclick=()=>void peerConnect();
+e('send-peer').onclick=()=>void sendText();
+e('message-compose').onkeydown=event=>{if(event.key==='Enter')void sendText();};
+window.addEventListener('focus',()=>{for(const id of messages.keys())void reportSeenIfVisible(id);});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')for(const id of messages.keys())void reportSeenIfVisible(id);});
+api.onStop(status=>{gate(status.reason||'Session stopped');void gateStatus();});
+api.onPeerEvent(handlePeerEvent);
+setInterval(updateMessages,250);
+api.status().then(async status=>{
+ if(status.unlocked)await openAccount(status);
+ else{gate('Enter your password');await gateStatus();}
+}).catch(()=>gate('Encrypted profile service unavailable'));
