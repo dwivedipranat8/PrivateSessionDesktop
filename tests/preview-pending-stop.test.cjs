@@ -109,3 +109,12 @@ test('remote Clear and heartbeat failure hide screen and stop media',()=>{
  assert.ok(renderer.includes("clearMessages('Session cleared');stopMedia();chatReady=false"));
  assert.ok(renderer.includes("clearMessages('Session verification delayed');stopMedia();chatReady=false"));
 });
+
+test('Protected Start requires fresh permission event from Electron, not only Start IPC',()=>{
+ const src=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
+ assert.match(src,/const approved=permission==='media'&&canUseMedia\(wc\)/);
+ assert.match(src,/mediaPermissionAt=Date\.now\(\)/);
+ assert.match(src,/mediaPermissionAt===0/);
+ assert.match(src,/mediaPermissionAt>mediaDeadline/);
+ assert.match(src,/Protected camera\/microphone permission not granted in this session/);
+});

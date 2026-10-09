@@ -15,7 +15,7 @@ function approvedSetupLocation(location){
  return !required||(required==='host'&&location==='local')||(required==='protected'&&location==='portable');
 }
 
-let win=null,folder=null,role=null,profile=null,profileFileSignature=null,mediaDeadline=0,interval=null,lastUnlockAttempt=0,authEpoch=0;
+let win=null,folder=null,role=null,profile=null,profileFileSignature=null,mediaDeadline=0,mediaPermissionAt=0,interval=null,lastUnlockAttempt=0,authEpoch=0;
 let modulePromise=null,liveChat=null,connectingPeer=false;
 function profileLibrary(){
  if(!modulePromise)modulePromise=import(pathToFileURL(path.join(__dirname,'../crypto-probe/src/local-profiles.mjs')).href);
@@ -67,7 +67,7 @@ function stop(reason){
  // Always invalidate pending permission/Start attempts, even when the demo
  // has not reached active state. A delayed renderer getUserMedia result must
  // be discarded and its tracks stopped after lock, sleep, USB loss or End.
- mediaDeadline=0;
+ mediaDeadline=0;mediaPermissionAt=0;
  authEpoch++;
  // Detach and revoke live transport BEFORE wiping the unlocked identity.
  // Awaiting teardown must never allow a stale callback to restore a session.
@@ -108,7 +108,11 @@ app.whenReady().then(()=>{
  const canUseMedia=wc=>!!profile&&['guest','host'].includes(role)&&!!win&&!win.isDestroyed()&&wc?.id===win.webContents.id &&
     (demo.active||Date.now()<mediaDeadline);
  volatileSession.setPermissionRequestHandler((wc,permission,callback)=>{
-   callback(permission==='media'&&canUseMedia(wc));
+   const approved=permission==='media'&&canUseMedia(wc);
+   // Record an OS permission request, not a renderer-supplied claim.
+   // This alone cannot attest that both tracks remain live later.
+   if(approved&&role==='guest'&&!demo.active)mediaPermissionAt=Date.now();
+   callback(approved);
  });
  volatileSession.setPermissionCheckHandler((wc,permission)=>
    permission==='media'&&canUseMedia(wc));
@@ -177,15 +181,19 @@ app.whenReady().then(()=>{
  register('arm-media',()=>{
    if(demo.active)return {ok:false,error:'Session already active'};
    const check=guardReady();if(!check.ok)return check;
+   mediaPermissionAt=0;
    mediaDeadline=Date.now()+20000;
    return {ok:true};
  });
  register('start',()=>{
    if(role==='guest'&&process.platform==='win32' && !win?.isContentProtected())return {ok:false,error:'Window capture exclusion unavailable'};
    if(demo.active)return {ok:false,error:'Session already active'};
-   if(role==='guest'&&Date.now()>=mediaDeadline)return {ok:false,error:'Protected view requires camera and microphone'};
+   if(role==='guest'&&
+      (Date.now()>=mediaDeadline||mediaPermissionAt===0||
+        mediaPermissionAt>mediaDeadline||Date.now()-mediaPermissionAt>20000))
+    return {ok:false,error:'Protected camera/microphone permission not granted in this session'};
    const check=guardReady();if(!check.ok){mediaDeadline=0;return check;}
-   const r=demo.start();mediaDeadline=0;return r;
+   const r=demo.start();mediaDeadline=0;mediaPermissionAt=0;return r;
  });
  register('stop',()=>stop('Ended locally'));
  register('fail',()=>stop('Simulated failure'));
