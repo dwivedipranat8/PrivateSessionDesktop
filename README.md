@@ -18,3 +18,7 @@ No local Node.js installation is required for GitHub-hosted builds.
 Peer connections, authenticated E2EE, real read receipts, networked host-only controls, real USB physical presence monitor and secure fail-closed implementation, signed Mac release, multi-device enrollment, secure media transport, and security review. Do not share as secure software.
 
 A developer/testing identity must not have a backdoor into any future conversations. Each authorized device must receive a separate approved identity. Real two-endpoint mandatory camera/mic must require **independent informed consent** on both endpoints.
+
+
+## Updated prototype reminder
+The security-engine development branch contains cloud-tested cryptographic components, but its Electron interface is still a **local-only DUMMY PREVIEW**. Neither of the two user accounts has a real login/password yet; users will create private passwords locally in a future onboarding flow. Current Windows display protection is not a complete anti-recording guarantee; macOS ScreenCaptureKit may bypass Electron. See SECURITY_STATUS.md. The latest demo supports simulated 120-second Seen/unseen deletion and either role's local Clear & End; it cannot clear another computer because no remote peer connection is implemented.

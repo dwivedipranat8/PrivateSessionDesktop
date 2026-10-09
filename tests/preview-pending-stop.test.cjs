@@ -1,0 +1,120 @@
+'use strict';
+const {test}=require('node:test'),assert=require('node:assert/strict');
+const fs=require('node:fs'),path=require('node:path');
+test('lock/End always broadcasts cancellation even before session reaches active',()=>{
+ const app=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
+ const first=app.indexOf('function stop(reason)');
+ const end=app.indexOf('function isAvailable',first);
+ assert.ok(first>=0&&end>first);
+ const body=app.slice(first,end);
+ assert.match(body,/mediaDeadline=0;/);
+ assert.match(body,/demo\.end\(reason\)/);
+ assert.match(body,/webContents\.send\('p:stopped',status\)/);
+ assert.equal(body.includes('if(demo.end(reason)'),false);
+});
+
+test('both preview roles may Clear & End but preview never claims remote deletion',()=>{
+ const src=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
+ assert.match(src,/register\('clear-end'/);
+ assert.match(src,/Cleared & ended locally \(dummy preview only\)/);
+ assert.equal(src.includes("register('delete-chat'"),false);
+});
+
+test('protected local preview requires selected USB folder and never claims encryption',()=>{
+ const main=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
+ assert.match(main,/role==='guest'&&!folder/);
+ assert.match(main,/},500\);/);
+ const html=fs.readFileSync(path.join(__dirname,'../ui/index.html'),'utf8');
+ assert.match(html,/external drive/);
+ assert.match(main,/profileExists\(profile\.profilePath\)/);
+});
+
+test('first-use password field stays visible and normal role dropdown is absent',()=>{
+ const renderer=fs.readFileSync(path.join(__dirname,'../ui/renderer.js'),'utf8');
+ const html=fs.readFileSync(path.join(__dirname,'../ui/index.html'),'utf8');
+ assert.match(renderer,/e\('account-form'\)\.hidden=false/);
+ assert.match(renderer,/e\('unlock'\)\.hidden=!state\.registered/);
+ assert.equal(html.includes('id="role"'),false);
+ assert.match(html,/id="passphrase"/);
+});
+test('protected self-preview is absent while remote encrypted video has an explicit player',()=>{
+ const html=fs.readFileSync(path.join(__dirname,'../ui/index.html'),'utf8');
+ assert.equal(html.includes('id="camera-view"'),false);
+ assert.match(html,/id="remote-video"/);
+ assert.match(html,/id="media-indicator"/);
+});
+
+test('late encrypted account-unlock callback cannot reactivate access after shutdown',()=>{
+ const main=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
+ assert.match(main,/authEpoch\+\+/);
+ assert.match(main,/epoch!==authEpoch/);
+ assert.match(main,/lib\.clearUnlockedProfile\(result\)/);
+});
+test('removed encrypted profile initiates program shutdown even before session Start',()=>{
+ const main=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
+ assert.match(main,/profile&&role==='guest'&&\(!profileFileSignature/);
+ assert.match(main,/Encrypted profile drive removed/);
+});
+
+test('emergency loss conceals window and terminates program without renderer ACK',()=>{
+ const main=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
+ const emergency=main.slice(main.indexOf('function emergencyQuit(reason)'),main.indexOf('function wipeProfile(){'));
+ assert.match(emergency,/win\.hide\(\)/);
+ assert.match(emergency,/stop\(reason\)/);
+ assert.match(emergency,/app\.exit\(0\)/);
+ assert.match(main,/fileSignature\(profile\.profilePath\)!==profileFileSignature/);
+});
+
+test('portable app checks original Windows pen-drive EXE location, not unpacked temp',()=>{
+ const code=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
+ assert.match(code,/PORTABLE_EXECUTABLE_FILE/);
+ assert.match(code,/profileFileSignature=result\.role==='protected'\?fileSignature\(result\.profilePath\):null/);
+});
+test('network loss closes an unlocked app even before Start',()=>{
+ const code=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
+ assert.match(code,/if\(profile&&!net\.isOnline\(\)\)/);
+ assert.match(code,/emergencyQuit\('Network unavailable'\)/);
+});
+
+test('all real peer operations stay in main process and require authorized session',()=>{
+ const app=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
+ for(const key of ['peer-prepare','peer-connect','peer-send','peer-seen','peer-clear','peer-turn'])
+  assert.match(app,new RegExp("register\\('"+key+"'"));
+ assert.match(app,/privateKeyBytes:profile\.identity\.privateKeyBytes/);
+ assert.match(app,/Mac protected capture restriction not independently verified/);
+ assert.match(app,/epoch!==authEpoch/);
+});
+
+test('Host camera/mic is optional but an explicit opt-in is supported',()=>{
+ const app=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
+ const ui=fs.readFileSync(path.join(__dirname,'../ui/renderer.js'),'utf8');
+ assert.match(app,/\['guest','host'\]\.includes\(role\)/);
+ assert.match(ui,/e\('host-share'\)\.checked/);
+});
+
+test('stop detaches real Noise client before profile wipe; late callbacks cannot resurrect session',()=>{
+ const code=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
+ const stop=code.slice(code.indexOf('function stop(reason){'),code.indexOf('function isAvailable',code.indexOf('function stop(reason){')));
+ assert.match(stop,/authEpoch\+\+/);
+ assert.match(stop,/const previous=liveChat;/);
+ assert.match(stop,/liveChat=null;connectingPeer=false;/);
+ assert.match(stop,/previous\?\.close\(\)/);
+ assert.ok(stop.indexOf('previous?.close()')<stop.indexOf('wipeProfile()'));
+});
+test('remote Clear and heartbeat failure hide screen and stop media',()=>{
+ const main=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
+ const renderer=fs.readFileSync(path.join(__dirname,'../ui/renderer.js'),'utf8');
+ assert.ok(main.includes("['cleared','conceal','closed'].includes(info.type)"));
+ assert.ok(main.includes("win.hide()"));
+ assert.ok(renderer.includes("clearMessages('Session cleared');stopMedia();chatReady=false"));
+ assert.ok(renderer.includes("clearMessages('Session verification delayed');stopMedia();chatReady=false"));
+});
+
+test('Protected Start requires fresh permission event from Electron, not only Start IPC',()=>{
+ const src=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
+ assert.match(src,/const approved=permission==='media'&&canUseMedia\(wc\)/);
+ assert.match(src,/mediaPermissionAt=Date\.now\(\)/);
+ assert.match(src,/mediaPermissionAt===0/);
+ assert.match(src,/mediaPermissionAt>mediaDeadline/);
+ assert.match(src,/Protected camera\/microphone permission not granted in this session/);
+});

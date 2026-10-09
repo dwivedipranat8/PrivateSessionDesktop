@@ -1,44 +1,85 @@
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'self'; media-src 'self' blob:; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
-<title>Private Session Preview</title>
+<title>Private Session — Experimental</title>
 <link rel="stylesheet" href="style.css">
 <script defer src="../core/message-policy.js"></script>
-<script defer src="renderer.js"></script></head>
-<body>
-<div class="layout">
-<aside>
-<h2>◈ Private Session</h2>
-<p class="soft">Preview 0.2</p>
-<div class="warning">LOCAL DEMO — not an encrypted messenger</div>
-<label for="role">Demo view</label>
-<select id="role"><option value="host">Host</option><option value="guest">Guest</option></select>
-<p class="soft tiny">Roles are simulated here.</p>
-</aside>
-<main>
-<header><div><h1>Private conversation</h1><p>Camera and microphone required</p></div><span id="status">Inactive</span></header>
-<div class="grid">
-<section class="panel grow">
-<div class="panel-top"><div><h3>Chat</h3><p class="soft">Seen + 2 seconds</p></div><button id="delete" class="subtle danger" hidden disabled>Delete chat</button></div>
-<div id="messages"><p class="empty">Press Start to begin.</p></div>
-<button id="message-btn" disabled>Add test message</button>
+<script defer src="../core/rtc-call.js"></script>
+<script defer src="renderer.js"></script>
+</head><body>
+<section id="account-gate" class="account-gate">
+ <div class="account-card">
+  <h1>Private Session</h1>
+  <p class="soft">Password-protected identity · No public account discovery</p>
+  <form id="account-form">
+   <label for="passphrase">Password</label>
+   <input id="passphrase" type="password" autocomplete="off" spellcheck="false" minlength="16" maxlength="512" placeholder="Enter password" required>
+   <button class="primary" id="unlock" type="submit">Unlock</button>
+  </form>
+  <section id="initial-setup" hidden>
+   <p class="soft">Create an encrypted profile on this computer or on the external drive.</p>
+   <div class="buttons"><button id="setup-local" type="button">This computer</button>
+   <button id="setup-portable" type="button">External drive</button></div>
+  </section>
+  <p id="account-error" role="status" aria-live="polite"></p>
+  <div class="warning">UNRELEASED TEST BUILD — Screenshot and USB hardware guarantees have not been validated. Do not share confidential information.</div>
+ </div>
 </section>
-<div class="side">
-<section class="panel">
-<h3>Camera &amp; microphone</h3>
-<div class="camera"><video muted autoplay playsinline id="camera-view"></video><p id="no-camera">Camera OFF</p></div>
-<div class="mic-row"><span>Microphone</span><span id="mic-state">OFF</span></div>
-<div class="meter"><div id="mic-level"></div></div>
-<p class="soft tiny" id="sensor-status">Both required to start.</p>
-</section>
-<section class="panel">
-<h3>USB test</h3><p class="soft" id="usb-path">No folder selected</p>
-<div class="buttons"><button id="usb-btn">Choose folder</button><button id="usb-clear">Clear</button></div>
-</section>
-</div></div>
-<footer><div class="buttons">
-<button class="primary" id="start">Start</button>
-<button class="danger" id="end" disabled>End</button>
-<button id="fail" disabled>Test failure</button>
-</div><span id="notice">Ready</span></footer>
-</main></div></body></html>
+<div class="layout" id="app-shell" hidden>
+ <aside>
+  <div class="brand">◈ Private Session</div>
+  <div class="small-label">Authenticated identity</div>
+  <output id="my-peer-id" class="mono">Loading identity…</output>
+  <button id="lock" type="button">Lock</button>
+  <div class="warning">EXPERIMENTAL — Capture prevention is not guaranteed. Device and relay setup required.</div>
+  <details id="pairing">
+   <summary>Connection setup</summary>
+   <p class="soft">Both participants must verify peer identities independently. This requires a deployed allowlisted relay.</p>
+   <label for="relay-address">Relay address</label>
+   <textarea id="relay-address" rows="2" spellcheck="false" placeholder="/dns4/.../tcp/443/tls/ws/p2p/..."></textarea>
+   <label for="relay-peer">Pinned relay identity</label>
+   <input id="relay-peer" spellcheck="false" placeholder="12D3KooW...">
+   <label for="peer-id">Approved other participant</label>
+   <input id="peer-id" spellcheck="false" placeholder="12D3KooW...">
+   <label for="session-id">Agreed one-time session code</label>
+   <input id="session-id" spellcheck="false" placeholder="Share securely with the other participant">
+   <button id="generate-session" type="button">Generate session code</button>
+   <button id="prepare-peer" type="button" disabled>Authorize connection</button>
+   <label for="own-circuit">My relay address (copy to peer)</label>
+   <textarea id="own-circuit" rows="3" readonly></textarea>
+   <label for="remote-circuit">Peer's relay address</label>
+   <textarea id="remote-circuit" rows="3" spellcheck="false"></textarea>
+   <button id="connect-peer" type="button" disabled>Connect approved peer</button>
+  </details>
+ </aside>
+ <main>
+  <header><div>
+   <h1>Conversation</h1>
+   <p id="media-indicator" aria-live="polite">Camera and microphone off</p>
+  </div><span id="status">Locked</span></header>
+  <div id="conversation">
+   <div id="messages" aria-live="polite"><p class="empty">No messages</p></div>
+   <div class="compose">
+    <input id="message-compose" maxlength="2048" placeholder="Message encrypted peer" disabled>
+    <button id="send-peer" class="primary" disabled>Send</button>
+   </div>
+   <p class="soft">First authenticated Seen → erase after 120 seconds. Unseen → erase after 120 seconds. No offline queue.</p>
+  </div>
+  <section class="call-panel">
+   <div>
+    <strong>Live encrypted video</strong>
+    <p class="soft" id="call-status">Available only after authorized TURN setup and verified encrypted peer connection.</p>
+    <label id="host-capture-row" class="soft" hidden><input type="checkbox" id="host-share"> Share my own camera and microphone (optional)</label>
+   </div>
+   <video id="remote-video" autoplay playsinline></video>
+  </section>
+  <footer>
+   <div class="buttons">
+    <button id="start" class="primary">Start private session</button>
+    <button id="delete" class="danger" disabled>Clear &amp; End</button>
+    <button id="end" disabled>End</button>
+   </div>
+   <p id="notice" role="status">Ready</p>
+  </footer>
+ </main>
+</div></body></html>

@@ -1,31 +1,50 @@
-*{box-sizing:border-box}body{margin:0;background:#0c182b;color:#e9f2fb;font-family:Segoe UI,Arial,sans-serif}
-button,select{background:#243a54;border:1px solid #3c5572;color:#f1f5fb;border-radius:9px;padding:10px 12px;font-weight:600;cursor:pointer}
-button:disabled,select:disabled{opacity:.4;cursor:default}button[hidden]{display:none}.primary{background:#65d9ce;color:#072d31;border-color:#65d9ce}
-.danger{background:#613448}.layout{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:100vh}
-aside{padding:25px 20px;background:#101d31;border-right:1px solid #263a54}h2{font-size:19px;margin:0}
-.soft{color:#9aaec4;font-size:12px;line-height:1.5}.tiny{font-size:11px}.warning{padding:11px;margin:25px 0;border-radius:9px;border:1px solid #84673c;background:#302918;color:#ffe1a6;font-size:11px}
-aside label{font-size:12px;color:#c3d1e3;display:block;margin:0 0 8px}aside select{width:100%}
-main{display:flex;flex-direction:column;gap:21px;padding:27px}
-header{display:flex;align-items:center;justify-content:space-between;gap:16px}
-h1{font-size:24px;margin:0 0 7px}header p{font-size:13px;color:#99adc5;margin:0}
-#status{border:1px solid #4e698a;border-radius:30px;padding:9px 14px;font-size:12px;flex:none}
-#status.live{border-color:#58b4a6;color:#88efdf}
-.grid{display:grid;grid-template-columns:minmax(290px,1.3fr) minmax(230px,1fr);gap:15px;flex:1}
-.panel{padding:19px;border:1px solid #2a425e;background:#15253c;border-radius:12px}
-.panel-top{display:flex;justify-content:space-between;align-items:center;gap:12px}
-.panel h3{margin:0;font-size:15px}.grow{display:flex;flex-direction:column}
-#messages{flex:1;min-height:245px;padding:15px 0;overflow:auto}
-.empty{text-align:center;color:#8fa3bd;margin-top:75px!important;font-size:13px}
-.bubble{background:#1e535a;border-radius:12px;padding:11px;font-size:13px;margin:9px 0 9px auto;width:fit-content;max-width:100%}
-.bubble-foot{display:flex;align-items:center;gap:9px;margin-top:7px}
-.bubble-foot small{color:#b9e9e8;font-size:10px}.seen{border:1px solid #417a80;padding:5px 8px;background:#22475d;font-size:10px}
-.side{display:flex;flex-direction:column;gap:15px}
-.camera{height:178px;background:#0b1727;display:flex;align-items:center;justify-content:center;margin:13px -6px;overflow:hidden}
-.camera video{width:100%;height:100%;object-fit:contain;display:none}
-.camera p{color:#91a6c0;font-size:12px}
-.mic-row{display:flex;align-items:center;justify-content:space-between;color:#c0d1e1;font-size:12px}
-#mic-state{color:#70e2ce}.meter{height:8px;background:#0a1729;border-radius:9px;margin:11px 0;overflow:hidden}
-#mic-level{background:#60cbbb;border-radius:9px;width:0;height:100%;transition:width .15s}
-.buttons{display:flex;flex-wrap:wrap;gap:8px}footer{display:flex;justify-content:space-between;align-items:center;gap:10px;padding-top:17px;border-top:1px solid #2a425e}
-footer span{font-size:12px;color:#9bb0c8}#usb-path{word-break:break-word}
-@media(max-width:850px){.layout{grid-template-columns:1fr}aside{padding:14px}.grid{grid-template-columns:1fr}main{padding:15px}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:#0b1424;color:#e9f2fb;font:14px/1.5 Segoe UI,system-ui,Arial,sans-serif}
+input,textarea,button{font:inherit}
+button{background:#223851;border:1px solid #45607a;border-radius:9px;color:#edf8ff;padding:9px 13px;font-weight:600;cursor:pointer}
+button:disabled{opacity:.38;cursor:not-allowed}
+button.primary{background:#6be1d7;border-color:#6be1d7;color:#052c2f}
+button.danger{background:#633848;color:#fff}
+input,textarea{background:#0c1b2f;color:#effaff;border:1px solid #3f5d78;border-radius:8px;padding:9px;width:100%}
+input[type=checkbox]{width:auto}
+label{display:block;margin-top:12px;font-size:12px;color:#abc4d8}
+.brand{font-size:19px;font-weight:700;letter-spacing:.2px}
+.small-label{font-size:11px;color:#9bb4cb;margin-top:25px}
+.soft{color:#9fb7cb;font-size:12px;line-height:1.5}
+.mono{display:block;word-break:break-all;user-select:text;font:11px/1.5 Consolas,monospace;color:#98e8df}
+.warning{padding:12px;color:#ffe1ad;border:1px solid #88643b;background:#35291c;border-radius:10px;font-size:11px;margin:18px 0}
+.account-gate{min-height:100vh;display:grid;place-items:center;padding:20px}
+.account-card{max-width:460px;width:100%;padding:28px;border:1px solid #34516b;background:#15263a;border-radius:19px}
+.account-card h1{margin:0 0 6px}
+.account-card form{margin:20px 0}
+.account-card form button{width:100%;margin-top:12px}
+#account-error{font-size:12px;color:#ffbba6}
+.buttons{display:flex;gap:9px;flex-wrap:wrap}
+.layout{display:grid;grid-template-columns:290px minmax(0,1fr);min-height:100vh}
+aside{background:#101e32;border-right:1px solid #2e4862;padding:25px 20px;overflow:auto;max-height:100vh}
+aside>button{margin-top:12px;width:100%}
+details{border-top:1px solid #314a62;padding:14px 0;margin-top:20px}
+summary{cursor:pointer;font-weight:600;color:#d5eaf4}
+details input,details textarea{font-size:11px;margin-top:5px}
+details button{margin-top:12px;width:100%}
+main{padding:24px;display:flex;flex-direction:column;gap:16px;min-width:0}
+header{display:flex;justify-content:space-between;align-items:center}
+h1{font-size:24px;margin:0}
+header p{margin:2px 0}
+#status{padding:8px 14px;border:1px solid #4a6380;border-radius:99px;font-size:12px}
+#status.live{color:#73e7d8;border-color:#4bc5b4}
+#conversation{display:flex;flex-direction:column;background:#132239;border:1px solid #2d4863;border-radius:14px;padding:16px;flex:1;min-height:300px}
+#messages{flex:1;max-height:50vh;overflow-y:auto;min-height:180px}
+.empty{color:#8fa7c1;text-align:center;padding:42px 0}
+.bubble{padding:10px 14px;border-radius:13px;background:#28455b;max-width:80%;width:fit-content;margin:9px 0;overflow-wrap:anywhere}
+.bubble.outgoing{background:#205c60;margin-left:auto}
+.bubble-foot{font-size:10px;color:#b7dce5;margin-top:5px}
+.compose{display:flex;gap:9px;margin-top:14px}
+.compose button{flex:none}
+.call-panel{display:flex;align-items:center;gap:18px;background:#132239;border:1px solid #2d4863;border-radius:14px;padding:13px}
+.call-panel>div{flex:1}
+#remote-video{width:min(35%,250px);height:122px;object-fit:contain;background:#081421;border-radius:9px}
+footer{display:flex;justify-content:space-between;gap:14px;align-items:center}
+footer p{color:#a5bfd1;font-size:12px;max-width:48%}
+@media(max-width:850px){.layout{grid-template-columns:1fr}aside{max-height:none}.call-panel{flex-wrap:wrap}#remote-video{width:100%}}

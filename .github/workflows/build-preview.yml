@@ -1,11 +1,17 @@
-name: Build dummy preview
+name: Security tests and opt-in packaging
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
   workflow_dispatch:
     inputs:
+      verify_packages:
+        description: Build a Windows EXPERIMENTAL package manually (not a security-certified release)
+        type: boolean
+        default: false
       build_mac:
-        description: Build unsigned, untested Mac artifacts
+        description: Compile Mac guard and package a Mac EXPERIMENTAL artifact (manual opt-in)
         type: boolean
         default: false
 permissions:
@@ -23,6 +29,7 @@ jobs:
       - run: node --check app/preload.cjs
       - run: node --check ui/renderer.js
   windows:
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && inputs.verify_packages)
     needs: test
     runs-on: windows-latest
     steps:
@@ -31,15 +38,43 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --no-audit --no-fund
-      - run: npm run build:win
+      - name: Legacy main-branch demo
+        if: github.ref == 'refs/heads/main'
+        run: npm run build:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Build Main installer with locked identity
+        if: github.event_name == 'workflow_dispatch' && inputs.verify_packages && github.ref == 'refs/heads/development/security-engine'
+        run: npm run build:win:main
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Build Protected installer with locked identity
+        if: github.event_name == 'workflow_dispatch' && inputs.verify_packages && github.ref == 'refs/heads/development/security-engine'
+        run: npm run build:win:protected
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - uses: actions/upload-artifact@v4
+        if: github.ref == 'refs/heads/main'
         with:
           name: Windows-Dummy-Preview
           path: dist/*.exe
           if-no-files-found: error
           retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'workflow_dispatch' && inputs.verify_packages && github.ref == 'refs/heads/development/security-engine'
+        with:
+          name: PrivateSession-Main-EXPERIMENTAL
+          path: dist/main/*.exe
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'workflow_dispatch' && inputs.verify_packages && github.ref == 'refs/heads/development/security-engine'
+        with:
+          name: PrivateSession-Protected-EXPERIMENTAL
+          path: dist/protected/*.exe
+          if-no-files-found: error
+          retention-days: 7
+
   mac:
     if: github.event_name == 'workflow_dispatch' && inputs.build_mac
     needs: test
@@ -49,13 +84,79 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Compile native Mac removable-volume guard (compile only)
+        run: swiftc -O -framework DiskArbitration native/macos/VolumeGuard.swift -o /tmp/PrivateSessionVolumeGuard
       - run: npm install --no-audit --no-fund
       - run: npm run build:mac
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - uses: actions/upload-artifact@v4
+        if: github.event_name == 'workflow_dispatch' && inputs.build_mac
         with:
-          name: Mac-Dummy-Preview-UNSIGNED
+          name: Mac-EXPERIMENTAL-UNSIGNED
           path: dist/*.zip
           if-no-files-found: error
           retention-days: 7
+
+  noise-probe:
+    if: github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Noise integration packages
+        working-directory: crypto-probe
+        run: npm install --no-audit --no-fund
+      - name: Install restricted relay for real account-lease integration tests
+        working-directory: relay-service
+        run: npm install --no-audit --no-fund
+      - name: Verify password-derived pinned Noise, relay-lease and real text flow
+        working-directory: crypto-probe
+        run: npm test
+
+  relay-probe:
+    if: github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install private relay dependencies
+        working-directory: relay-service
+        run: npm install --no-audit --no-fund
+      - name: Run relay admission, TURN and local encrypted tests
+        working-directory: relay-service
+        run: npm test
+      - name: Syntax check relay service
+        working-directory: relay-service
+        run: node --check src/server.mjs
+
+  mac-guard-compile:
+    if: github.event_name == 'workflow_dispatch' && inputs.build_mac
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate opt-in Mac screenshot restriction test profile
+        run: plutil -lint capture-pilot/macos/ScreenCaptureRestriction.mobileconfig
+      - name: Compile native volume guard without producing a release package
+        run: swiftc -O -framework DiskArbitration native/macos/VolumeGuard.swift -o /tmp/PrivateSessionVolumeGuard
+
+  no-sensitive-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify release gate refuses unproven absolute anti-recording claims
+        run: |
+          set +e
+          node scripts/check-release.cjs > release-check.log 2>&1
+          result=$?
+          set -e
+          cat release-check.log
+          if [ "$result" -ne 1 ] || ! grep -q '^RELEASE_BLOCKED:' release-check.log || ! grep -q 'impossible_universal_capture_guarantee' release-check.log; then
+            echo "SECURITY ERROR: release gate did not produce expected refusal"
+            exit 1
+          fi
+          echo "Release refusal explicitly verified."

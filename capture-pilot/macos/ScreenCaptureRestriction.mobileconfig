@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+ <key>PayloadContent</key>
+ <array>
+  <dict>
+   <key>PayloadType</key><string>com.apple.applicationaccess</string>
+   <key>PayloadVersion</key><integer>1</integer>
+   <key>PayloadIdentifier</key><string>org.privatesession.test.capture.restrictions.20261009</string>
+   <key>PayloadUUID</key><string>9B56A5C1-2B51-4BB9-97E4-02BB9CDDA130</string>
+   <key>PayloadEnabled</key><true/>
+   <key>PayloadDisplayName</key><string>Test Only - Screenshot Restriction</string>
+   <key>allowScreenShot</key><false/>
+  </dict>
+ </array>
+ <key>PayloadType</key><string>Configuration</string>
+ <key>PayloadVersion</key><integer>1</integer>
+ <key>PayloadIdentifier</key><string>org.privatesession.test.capture.20261009</string>
+ <key>PayloadUUID</key><string>17474CFA-9A65-477B-9696-2F9CDA61A83B</string>
+ <key>PayloadDisplayName</key><string>Private Session - Capture Restriction PILOT</string>
+ <key>PayloadDescription</key><string>TEST ONLY. Opt-in Mac-wide screenshot and recording restriction. Remove this profile after testing.</string>
+ <key>PayloadOrganization</key><string>Private Session - Test Only</string>
+ <key>PayloadRemovalDisallowed</key><false/>
+ <key>PayloadScope</key><string>System</string>
+</dict>
+</plist>
