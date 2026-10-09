@@ -4,7 +4,7 @@ const fs=require('node:fs'),path=require('node:path');
 const {pathToFileURL}=require('node:url');
 const {DemoSession}=require('../core/session.cjs');
 const demo=new DemoSession();
-let win=null,folder=null,role=null,profile=null,mediaDeadline=0,interval=null,lastUnlockAttempt=0;
+let win=null,folder=null,role=null,profile=null,mediaDeadline=0,interval=null,lastUnlockAttempt=0,authEpoch=0;
 let modulePromise=null;
 function profileLibrary(){
  if(!modulePromise)modulePromise=import(pathToFileURL(path.join(__dirname,'../crypto-probe/src/local-profiles.mjs')).href);
@@ -37,6 +37,7 @@ function stop(reason){
  // has not reached active state. A delayed renderer getUserMedia result must
  // be discarded and its tracks stopped after lock, sleep, USB loss or End.
  mediaDeadline=0;
+ authEpoch++;
  demo.end(reason);
  wipeProfile();
  const status={...demo.status(),reason};
@@ -84,11 +85,14 @@ app.whenReady().then(()=>{
    const target=location==='local'?hostProfilePath():portableProfilePath();
    if(!target)return {ok:false,error:'Launch the protected app from the encrypted mounted drive'};
    if(profileExists(target))return {ok:false,error:'An encrypted profile already exists'};
+   const epoch=authEpoch;
    try{
     const lib=await profileLibrary();
+    if(epoch!==authEpoch)return {ok:false,error:'Setup cancelled'};
     if(location==='local')fs.mkdirSync(path.dirname(target),{recursive:true,mode:0o700});
     await lib.createLocalProfile({target,role:location==='local'?'host':'protected',passphrase});
     const result=await lib.unlockLocalProfile({targets:[target],passphrase});
+    if(epoch!==authEpoch){lib.clearUnlockedProfile(result);return {ok:false,error:'Setup cancelled'};}
     profile=result;role=result.role==='protected'?'guest':'host';
     folder=result.role==='protected'?path.dirname(result.profilePath):null;
     return {ok:true,role,registered:true,unlocked:true};
@@ -100,9 +104,11 @@ app.whenReady().then(()=>{
    const now=Date.now();
    if(now-lastUnlockAttempt<750)return {ok:false,error:'Wait before retrying'};
    lastUnlockAttempt=now;
+   const epoch=authEpoch;
    try{
     const lib=await profileLibrary();
     const result=await lib.unlockLocalProfile({targets:knownPaths(),passphrase});
+    if(epoch!==authEpoch){lib.clearUnlockedProfile(result);return {ok:false,error:'Unlock cancelled'};}
     profile=result;role=result.role==='protected'?'guest':'host';
     folder=result.role==='protected'?path.dirname(result.profilePath):null;
     return {ok:true,role,unlocked:true};
@@ -159,6 +165,10 @@ app.whenReady().then(()=>{
  powerMonitor.on('lock-screen',()=>{stop('Device locked');app.quit();});
  powerMonitor.on('suspend',()=>{stop('Device sleeping');app.quit();});
  interval=setInterval(()=>{
+   // Removal of the required encrypted profile ends access even before Start.
+   if(profile&&role==='guest'&&!profileExists(profile.profilePath)){
+    stop('Encrypted profile drive removed');app.quit();return;
+   }
    if(!demo.active)return;
    const result=guardReady();
    if(!result.ok){

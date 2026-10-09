@@ -42,3 +42,15 @@ test('protected own live video preview cannot render in UI',()=>{
  assert.equal(html.includes('<video'),false);
  assert.match(html,/id="media-indicator"/);
 });
+
+test('late encrypted account-unlock callback cannot reactivate access after shutdown',()=>{
+ const main=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
+ assert.match(main,/authEpoch\+\+/);
+ assert.match(main,/epoch!==authEpoch/);
+ assert.match(main,/lib\.clearUnlockedProfile\(result\)/);
+});
+test('removed encrypted profile initiates program shutdown even before session Start',()=>{
+ const main=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
+ assert.match(main,/profile&&role==='guest'&&!profileExists\(profile\.profilePath\)/);
+ assert.match(main,/Encrypted profile drive removed/);
+});
