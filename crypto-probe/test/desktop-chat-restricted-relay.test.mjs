@@ -34,9 +34,9 @@ test('restricted relay grants real one-device leases, E2EE text and automatic ve
   }
   assert.ok(destination,'Authenticated protected relay reservation absent');
   await host.connect(destination);
-  for(let i=0;i<100&&!host.connected;i++)await delay(100);
-  assert.equal(host.connected,true,'Encrypted heartbeat proof missing');
-  assert.equal(protectedChat.connected,true);
+  for(let i=0;i<100&&(!host.connected||!protectedChat.connected);i++)await delay(100);
+  assert.equal(host.connected,true,'Host encrypted heartbeat proof missing');
+  assert.equal(protectedChat.connected,true,'Protected encrypted heartbeat proof missing');
   const sent=await host.sendText('DUMMY TEST ONLY');
   assert.equal(sent.id.length>=12,true);
   for(let i=0;i<100&&!events.host.some(e=>e.type==='seen'&&e.id===sent.id);i++)
