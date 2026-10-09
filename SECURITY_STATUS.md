@@ -1,54 +1,74 @@
-# Private Session Desktop — security development status, 2026-10-09
+# Private Session Desktop — Security and release status (2026-10-09)
 
-**NOT A FINAL OR APPROVED PRIVATE MESSENGER.** Do not use sensitive content.
-The stable main branch remains unchanged. Work is on development/security-engine
-(PR #1). The absolute zero screenshot/recording requirement remains UNSOLVED
-and the final-sensitive-release CI gate intentionally refuses release.
+**NOT READY FOR SENSITIVE USE. The requirement to prevent every screenshot /
+recording on arbitrary Windows/Mac laptops has NOT been achieved.**
 
-## Newly implemented/tested
-- Distinct password-encrypted local Ed25519 device identity vaults, using scrypt
-  and AES-256-GCM. The user's passwords are created locally, not hardcoded or
-  shared through GitHub or ChatGPT. No real passwords exist yet.
-- Electron PREVIEW now has first-use setup and password-first unlock, deriving
-  the role automatically from the authenticated encrypted profile instead of
-  exposing a role dropdown every time.
-- Portable vault file resides alongside Windows executable, or at a mounted
-  /Volumes/... root on macOS if launched from that volume. This is NOT proof
-  of removable hardware, correct APFS encryption, or absence of OS caches.
-- Cloud integration test unlocks two encrypted accounts, converts keys to
-  libp2p Noise identities and exchanges authenticated dummy text + Seen + Clear
-  over a third-party relay. No server can read these test frames.
-- 120s after authenticated first Seen; 120s if unseen. The dummy user-facing
-  "Simulate recipient Seen" button is NOT a real remote Seen receipt.
-- Both enrolled participants may issue authenticated Clear & End. Remote
-  deletion is unconfirmed until a separate authenticated peer ACK arrives.
-- Server-side one-active-device-per-role leases, heartbeat and revocation are
-  unit/cloud tested but NOT yet wired to the Electron application.
-- Protected role requires camera+mic for local preview Start. Self-camera
-  preview has been removed, but a clear active-media indicator stays visible.
-- In the dummy app, encrypted identity file removal/change, network offline,
-  lock or suspend are designed to conceal the window and terminate process.
-  USB change is checked by a 500ms poll, not guaranteed hardware removal.
+PR #1 branch: development/security-engine. Stable main remains unchanged.
+The correct independent release gate remains deliberately blocked.
 
-## Incomplete or blocked
-- Desktop GUI DOES NOT yet send or receive actual encrypted peer messages,
-  authenticate peer identity, or make live encrypted remote video/audio calls.
-  WebRTC DTLS-SRTP engine and Noise router exist separately.
-- Actual Mac Disk Arbitration USB helper source compiles, but is not bundled,
-  supervised or tested on real encrypted APFS removable hardware.
-- No user-authorized Render/Cloudflare relay and TURN services deployed.
-- Windows screenshot exclusion uses Electron setContentProtection which covers
-  supported OS capture APIs, NOT every capture method. A screenshot file may
-  exist even when the window content is excluded. Microsoft says it is not
-  a strict security or DRM guarantee.
-- macOS Electron protection is bypassed by modern ScreenCaptureKit.
-  An opt-in device-wide allowScreenShot=false sample profile exists but was
-  NOT installed and NOT tested on the user's friend's MacBook.
-- Zero risk of recording on arbitrary laptops cannot be guaranteed.
-  Screenshot attempt detection cannot be universally guaranteed.
-- Root/admin/kernel compromise cannot be reliably ruled out by software-only
-  local OS policy checks; peer alerts require a real authenticated connection.
-- Proper encrypted USB-only runtime data layout, native hardware checks,
-  cloned-identity defense, app signing/notarization, independent security
-  review and adversarial physical testing are release blockers.
-- Do not merge to main or call a green dummy build a secure messenger.
+## Improved and cloud-tested
+
+- Password-first Electron onboarding using per-device Ed25519 profiles
+  encrypted with AES-256-GCM and scrypt. No pre-generated live passwords.
+- No role dropdown. Local unlocked identity determines account role.
+- Host media optional; Protected media mandatory in the renderer on Start.
+  Protected user has no self-preview; a visible microphone/camera active
+  indicator and OS-level permission remain mandatory for consent.
+- Electron main now has authenticated session IPC for approved pinned relay,
+  approved peer identity, one-time session code, live encrypted text, Seen,
+  and verified bilateral Clear & End.
+- Pinned Noise network client requires an active server-issued single-device
+  account lease, renewal, approved peer identity, relay address and heartbeat.
+- Versioned encrypted frames, authenticated message ordering, no offline
+  message queue, 120-second unseen expiry, 120 seconds after authenticated
+  Seen, both participants may Clear & End.
+- Remote-only video element plus WebRTC DTLS-SRTP TURN-only engine and
+  authenticated Noise SDP/ICE wiring; actual camera-to-Mac calls remain
+  unverified on real devices.
+- Restricted relay integration cloud test succeeded for server-issued
+  account leases, real endpoint-to-endpoint encrypted dummy text, heartbeat,
+  authenticated Seen and bilateral Clear.
+- Developer/builder identity explicitly cannot pair with either private
+  chat participant on the restricted relay.
+
+## Not verified / blocked
+
+- No user-authorized relay or TURN credentials deployed. Experimental UI
+  requires manually verified peer public keys, a pinned relay identity,
+  copied relay circuit addresses and one-time session codes.
+- Windows build is NOT considered releasable; newest packaging failed
+  (GitHub job log was unavailable; a one-job rerun was requested).
+- Real paired Windows+Mac use, call audio/video, camera unplug, sleep,
+  offline recovery, screenshot attempts and replay under network delays
+  require hardware and independent adversarial tests.
+- Mac Disk Arbitration volume watcher compiles but is not bundled,
+  supervised, bound to a verified APFS-encrypted external device or
+  physically verified. File-signature polling is a weaker fallback,
+  not guaranteed instantaneous real USB detection.
+- Windows Electron setContentProtection calls WDA_EXCLUDEFROMCAPTURE,
+  which covers supported capture APIs only. Microsoft's own
+  SetWindowDisplayAffinity documentation explicitly rejects any
+  strict anti-recording guarantee.
+- macOS Electron NSWindowSharingNone does NOT block modern
+  ScreenCaptureKit capture. Apple allowScreenShot=false managed policy
+  may be tested with fully informed Mac owner consent; no real test,
+  managed enrollment, nor evidence of universal blocking has occurred.
+- No normal application can guarantee detection of every screenshot
+  attempt or block cameras pointed at the display, arbitrary
+  privileged/kernel capture or a hostile compromised operating system.
+- Client root/admin tamper hints are not reliable proof of no compromise;
+  an offline peer cannot receive instant notice.
+- Cloned cryptographic keys, prolonged TURN credentials, and
+  unauthorized screen recording on Host remain material risks.
+- No independent formal cryptographic review, Windows/Mac app code
+  signing, release verification or tested downgrade/rollback.
+
+## Privacy / quality note
+
+Never install unsigned experimental packages or run confidential chats
+assuming security until independent testing verifies exactly the actual
+hardware and OS. Even extensive tests cannot establish **zero bugs**.
+
+The development source now has real E2EE components wired to the interface;
+passing cloud tests must not be misrepresented as proven confidentiality
+against endpoint compromise or all capture utilities.
