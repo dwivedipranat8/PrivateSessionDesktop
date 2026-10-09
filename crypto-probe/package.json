@@ -1,0 +1,15 @@
+{
+  "name": "private-session-noise-probe",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test test/noise.test.mjs"
+  },
+  "dependencies": {
+    "libp2p": "3.3.11",
+    "@libp2p/tcp": "11.0.28",
+    "@libp2p/noise": "17.0.3",
+    "@libp2p/yamux": "8.0.3"
+  }
+}

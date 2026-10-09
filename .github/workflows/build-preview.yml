@@ -1,5 +1,7 @@
 name: Build dummy preview
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [main, development/security-engine]
   workflow_dispatch:
@@ -60,3 +62,18 @@ jobs:
           path: dist/*.zip
           if-no-files-found: error
           retention-days: 7
+
+  noise-probe:
+    if: github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Noise integration packages
+        working-directory: crypto-probe
+        run: npm install --no-audit --no-fund
+      - name: Verify dummy authenticated Noise stream
+        working-directory: crypto-probe
+        run: npm test
