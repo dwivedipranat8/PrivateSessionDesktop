@@ -49,7 +49,7 @@ test('RTC-sized SDP permitted without arbitrary tiny 8192-byte frame limit',asyn
 });
 test('bad async session handler response fails close and never resumes',async()=>{
  const r=rig(),m=mk('control',1,'delete');
- // This untrusted sender is not the Host, so host-only Delete must be refused.
+ // Legacy Delete is not allowed after bilateral Clear & End replaced it.
  assert.equal(await r.route.receive(m,{noiseRemotePeerId:B}),false);
  assert.equal(r.route.closed,true);
  assert.equal(await r.route.send('heartbeat',{kind:'challenge',token:'12345678901234567890'}),false);
@@ -87,4 +87,17 @@ test('rejected asynchronous RTC action eventually refuses further session traffi
  assert.equal(r.closed,true);
  assert.equal(await r.receive(mk('heartbeat',2,'challenge'),{noiseRemotePeerId:B}),false);
  assert.equal(fail.length,1);
+});
+
+test('Protected participant can issue authenticated Clear & End',async()=>{
+ let cleared=0;
+ const control=new SecureControl({sessionId:SID,approvedRemoteDevice:B,
+  hostDeviceId:A,localDeviceId:A,onClearEnd:()=>cleared++});
+ const route=new SecureFrameRouter({sessionId:SID,localPeerId:A,remotePeerId:B,
+  sendAuthenticated:async()=>true,
+  onControl:(frame,meta)=>control.receive(frame,meta),
+  onHeartbeat:async()=>true,onRtc:async()=>true});
+ assert.equal(await route.receive(mk('control',1,'clear_end'),{noiseRemotePeerId:B}),true);
+ assert.equal(cleared,1);
+ assert.equal(await route.receive(mk('control',2,'text',{messageId:'message_123456',text:'late'}),{noiseRemotePeerId:B}),false);
 });
