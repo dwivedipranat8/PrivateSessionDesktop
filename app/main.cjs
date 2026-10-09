@@ -5,9 +5,14 @@ const {DemoSession}=require('../core/session.cjs');
 const demo=new DemoSession();
 let win=null,folder=null,role='host',mediaDeadline=0,interval=null;
 function stop(reason){
+ // Always invalidate pending permission/Start attempts, even when the demo
+ // has not reached active state. A delayed renderer getUserMedia result must
+ // be discarded and its tracks stopped after lock, sleep, USB loss or End.
  mediaDeadline=0;
- if(demo.end(reason)&&win&&!win.isDestroyed())win.webContents.send('p:stopped',demo.status());
- return demo.status();
+ demo.end(reason);
+ const status={...demo.status(),reason};
+ if(win&&!win.isDestroyed())win.webContents.send('p:stopped',status);
+ return status;
 }
 function isAvailable(p){
  if(!p)return true;
