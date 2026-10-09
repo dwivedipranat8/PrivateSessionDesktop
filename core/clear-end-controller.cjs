@@ -13,7 +13,7 @@ class ClearEndController {
    if(typeof fn!=='function')throw Error('Fail-closed operation missing');
   if(!Number.isInteger(timeoutMs)||timeoutMs<1||timeoutMs>1000)throw Error('Invalid cleanup timeout');
   Object.assign(this,{hide,stopMedia,clearChat,sendAuthenticated,dispose,makeRequestId,timeoutMs});
-  this.ended=false;this.requestId=null;this.peerConfirmed=false;this.disposed=false;
+  this.ended=false;this.requestId=null;this.peerConfirmed=false;this.disposed=false;this.resolveAck=null;
  }
  wipe(){
   if(this.ended)return false;
@@ -24,7 +24,7 @@ class ClearEndController {
  acknowledgeRemoteAck(requestId,{fromAuthenticatedPinnedPeer=false}={}){
   if(this.disposed||!this.ended||fromAuthenticatedPinnedPeer!==true||
      requestId!==this.requestId||this.requestId===null)return false;
-  this.peerConfirmed=true;return true;
+  this.peerConfirmed=true;if(this.resolveAck)this.resolveAck(true);return true;
  }
  async attempt(frame){
   let timer=null;
@@ -38,7 +38,7 @@ class ClearEndController {
  }
  finish(){
   if(this.disposed)return;
-  this.disposed=true;try{this.dispose();}catch{}
+  this.disposed=true;this.resolveAck=null;try{this.dispose();}catch{}
  }
  async localClear(){
   if(!this.wipe())return {localCleared:true,remoteConfirmed:this.peerConfirmed,alreadyEnded:true};
@@ -49,6 +49,19 @@ class ClearEndController {
   this.requestId=id;
   try{
    const delivered=await this.attempt({kind:'clear_end',requestId:id});
+   if(delivered&&!this.peerConfirmed){
+    // A successful encrypted write is NOT a peer ACK. The content is already
+    // hidden, sensors stopped; bound the time keys can remain alive for ACK.
+    let timer=null;
+    try{
+     await Promise.race([
+      new Promise(resolve=>{this.resolveAck=resolve;}),
+      new Promise(resolve=>{timer=setTimeout(()=>resolve(false),this.timeoutMs);})
+     ]);
+    }finally{
+     this.resolveAck=null;if(timer!==null)clearTimeout(timer);
+    }
+   }
    return {localCleared:true,deliveryAttempted:delivered,remoteConfirmed:this.peerConfirmed};
   }finally{this.finish();}
  }

@@ -43,3 +43,30 @@ test('duplicate local Clear & End does not re-send or restore keys',async()=>{
  assert.equal(r.events.filter(x=>x==='encrypted:clear_end').length,1);
  assert.equal(r.events.filter(x=>x==='destroyKeys').length,1);
 });
+
+test('matching authenticated peer ACK is required for confirmed remote Clear & End',async()=>{
+ let controller;
+ const c=new ClearEndController({hide:()=>{},stopMedia:()=>{},clearChat:()=>{},
+  sendAuthenticated:async frame=>{
+   queueMicrotask(()=>controller.acknowledgeRemoteAck(frame.requestId,{fromAuthenticatedPinnedPeer:true}));
+   return true;
+  },dispose:()=>{},timeoutMs:25,
+  makeRequestId:()=> 'unique_secure_clear_request_id_123'});
+ controller=c;
+ const result=await c.localClear();
+ assert.equal(result.remoteConfirmed,true);
+ assert.equal(result.localCleared,true);
+});
+test('untrusted or mismatched peer receipt cannot confirm remote clearing',async()=>{
+ let controller;
+ const c=new ClearEndController({hide:()=>{},stopMedia:()=>{},clearChat:()=>{},
+  sendAuthenticated:async frame=>{
+   controller.acknowledgeRemoteAck(frame.requestId,{fromAuthenticatedPinnedPeer:false});
+   controller.acknowledgeRemoteAck('wrong-id',{fromAuthenticatedPinnedPeer:true});
+   return true;
+  },dispose:()=>{},timeoutMs:5,
+  makeRequestId:()=> 'unique_secure_clear_request_id_123'});
+ controller=c;
+ const result=await c.localClear();
+ assert.equal(result.remoteConfirmed,false);
+});
