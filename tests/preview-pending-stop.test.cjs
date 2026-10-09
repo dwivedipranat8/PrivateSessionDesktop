@@ -25,7 +25,8 @@ test('protected local preview requires selected USB folder and never claims encr
  assert.match(main,/role==='guest'&&!folder/);
  assert.match(main,/},500\);/);
  const html=fs.readFileSync(path.join(__dirname,'../ui/index.html'),'utf8');
- assert.match(html,/does not prove a genuine encrypted USB device/);
+ assert.match(html,/encrypted drive/);
+ assert.match(main,/profileExists\(profile\.profilePath\)/);
 });
 
 test('first-use password field stays visible and normal role dropdown is absent',()=>{
