@@ -6,6 +6,10 @@ on:
     branches: [main, development/security-engine]
   workflow_dispatch:
     inputs:
+      verify_packages:
+        description: Build Windows and Mac packages for a manual release-gate check
+        type: boolean
+        default: false
       build_mac:
         description: Build unsigned, untested Mac artifacts
         type: boolean
@@ -25,6 +29,7 @@ jobs:
       - run: node --check app/preload.cjs
       - run: node --check ui/renderer.js
   windows:
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && inputs.verify_packages)
     needs: test
     runs-on: windows-latest
     steps:
@@ -44,7 +49,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
   mac:
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/development/security-engine' || (github.event_name == 'workflow_dispatch' && inputs.build_mac)
+    if: github.event_name == 'workflow_dispatch' && (inputs.build_mac || inputs.verify_packages)
     needs: test
     runs-on: macos-15
     steps:
@@ -98,3 +103,11 @@ jobs:
       - name: Syntax check relay service
         working-directory: relay-service
         run: node --check src/server.mjs
+
+  mac-guard-compile:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/development/security-engine'
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile native volume guard without producing a release package
+        run: swiftc -O -framework DiskArbitration native/macos/VolumeGuard.swift -o /tmp/PrivateSessionVolumeGuard
