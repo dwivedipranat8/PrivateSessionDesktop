@@ -11,6 +11,7 @@ function fake(){
    static async generateCertificate(){return {dummy:true};}
    constructor(configuration){this.configuration=configuration;this.signalingState='stable';this.connectionState='new';this.remoteDescription=null;made.push(this);}
    addTrack(){}
+   addTransceiver(kind,options){(this.transceivers??=[]).push({kind,options});}
    createDataChannel(){return {label:'chat',readyState:'open',send(){},close(){}};}
    async createOffer(){return {type:'offer',sdp:'v=0\n'+'a=fingerprint:sha-256 11:22:33\n'+'x'.repeat(40)};}
    async createAnswer(){return {type:'answer',sdp:'v=0\n'+'a=fingerprint:sha-256 11:22:33\n'+'x'.repeat(40)};}
@@ -87,4 +88,53 @@ test('incoming RTC data channels are forcibly closed, including on caller',async
  await c.prepare({localStream:media(),iceServers:[{urls:'turn:relay.example.org',username:'temp',credential:'temp'}],initiator:true});
  let closed=false;f.made[0].ondatachannel({channel:{close(){closed=true;}}});
  assert.equal(closed,true);c.end();
+});
+
+test('ending during certificate generation releases both camera/mic tracks',async()=>{
+ const f=fake(),s=media();let complete;
+ const c=new RTCCall({sessionId:SESSION,localDeviceId:LOCAL,peerDeviceId:PEER,
+  sendAuthenticated:async()=>{},rtcCtor:f.RTC,
+  certificateFactory:()=>new Promise(resolve=>{complete=resolve;})});
+ const pending=c.prepare({localStream:s,iceServers:[{urls:'turns:relay.example.org',username:'u',credential:'p'}]});
+ c.end('USB removed');complete({dummy:true});
+ await assert.rejects(pending,/cancelled/);
+ assert.equal(s.getTracks().every(t=>t.readyState==='ended'),true);
+});
+test('concurrent prepare calls are rejected before allocating a second session',async()=>{
+ const f=fake(),s=media();let resolveCert;
+ const c=new RTCCall({sessionId:SESSION,localDeviceId:LOCAL,peerDeviceId:PEER,
+  sendAuthenticated:async()=>{},rtcCtor:f.RTC,
+  certificateFactory:()=>new Promise(resolve=>{resolveCert=resolve;})});
+ const first=c.prepare({localStream:s,iceServers:[{urls:'turns:relay.example.org',username:'u',credential:'p'}]});
+ await assert.rejects(c.prepare({localStream:media(),iceServers:[]}),/twice/);
+ c.end();resolveCert({});
+ await assert.rejects(first);
+});
+test('Host can receive-only with zero local camera or mic tracks',async()=>{
+ const f=fake(),c=new RTCCall({sessionId:SESSION,localDeviceId:LOCAL,peerDeviceId:PEER,
+  role:'host',sendAuthenticated:async()=>{},rtcCtor:f.RTC});
+ await c.prepare({localStream:null,iceServers:[{urls:'turns:relay.example.org',username:'u',credential:'p'}]});
+ assert.equal(f.made[0].transceivers.length,2);c.end();
+});
+test('serialized incoming candidate waits until incoming offer is accepted',async()=>{
+ const f=fake(),c=new RTCCall({sessionId:SESSION,localDeviceId:LOCAL,peerDeviceId:PEER,
+  sendAuthenticated:async()=>{},rtcCtor:f.RTC});
+ await c.prepare({localStream:media(),iceServers:[{urls:'turns:relay.example.org',username:'u',credential:'p'}]});
+ let unlock;const original=f.made[0].setRemoteDescription.bind(f.made[0]);
+ f.made[0].setRemoteDescription=async o=>{await new Promise(resolve=>{unlock=resolve;});await original(o);};
+ const offer={kind:'offer',sessionId:SESSION,senderDevice:PEER,seq:1,
+  sdp:'v=0\na=fingerprint:sha-256 11:22:33\n'+'x'.repeat(30)};
+ const candidate={kind:'candidate',sessionId:SESSION,senderDevice:PEER,seq:2,
+  candidate:{candidate:'candidate:mock'}};
+ const p1=c.acceptSignal(offer,{fromAuthenticatedPinnedNoisePeer:true});
+ const p2=c.acceptSignal(candidate,{fromAuthenticatedPinnedNoisePeer:true});
+ await Promise.resolve();unlock();
+ assert.deepEqual(await Promise.all([p1,p2]),[true,true]);
+ assert.equal(f.made[0].candidates.length,1);c.end();
+});
+test('authenticated signalling send returning false is NOT success',async()=>{
+ const f=fake(),s=media(),c=new RTCCall({sessionId:SESSION,localDeviceId:LOCAL,peerDeviceId:PEER,
+  sendAuthenticated:async()=>false,rtcCtor:f.RTC});
+ await assert.rejects(c.prepare({localStream:s,iceServers:[{urls:'turns:relay.example.org',username:'u',credential:'p'}],initiator:true}));
+ assert.equal(s.getTracks().every(t=>t.readyState==='ended'),true);
 });
