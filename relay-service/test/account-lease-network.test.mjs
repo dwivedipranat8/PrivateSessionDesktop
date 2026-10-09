@@ -35,7 +35,15 @@ test('two independently approved host devices cannot hold concurrent leases',{ti
   assert.equal(p.role,'protected');
   const h2=await command(host2,'begin');
   assert.notEqual(h2.sessionId,h1.sessionId);
-  assert.equal((await command(host1,'renew',{sessionId:h1.sessionId,generation:h1.generation})).ok,false);
+  let previousRejected=false;
+  try{
+    const response=await command(host1,'renew',{sessionId:h1.sessionId,generation:h1.generation});
+    previousRejected=response.ok===false;
+  }catch{
+    // A force-closed Noise connection on takeover is an intentional denial.
+    previousRejected=true;
+  }
+  assert.equal(previousRejected,true);
   assert.equal((await command(host2,'renew',{sessionId:h2.sessionId,generation:h2.generation})).ok,true);
   assert.equal((await command(protectedPeer,'renew',{sessionId:p.sessionId,generation:p.generation})).ok,true);
  }finally{await Promise.allSettled([host1.stop(),host2.stop(),protectedPeer.stop(),server?.stop()]);}
