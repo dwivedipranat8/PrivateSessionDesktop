@@ -1,0 +1,61 @@
+name: Build dummy preview
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      build_mac:
+        description: Build unsigned, untested Mac artifacts
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/*.test.cjs
+      - run: node --check app/main.cjs
+      - run: node --check app/preload.cjs
+      - run: node --check ui/renderer.js
+  windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npm run build:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Windows-Dummy-Preview
+          path: dist/*.exe
+          if-no-files-found: error
+          retention-days: 7
+  mac:
+    if: github.event_name == 'workflow_dispatch' && inputs.build_mac
+    needs: test
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npm run build:mac
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Mac-Dummy-Preview-UNSIGNED
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 7
