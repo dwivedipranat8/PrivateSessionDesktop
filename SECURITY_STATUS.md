@@ -1,52 +1,54 @@
-# Development security status — 2026-10-09
+# Private Session Desktop — security development status, 2026-10-09
 
-**PRIVATE/PROTOTYPE — DUMMY DATA ONLY. No release for confidential messages.**
+**NOT A FINAL OR APPROVED PRIVATE MESSENGER.** Do not use sensitive content.
+The stable main branch remains unchanged. Work is on development/security-engine
+(PR #1). The absolute zero screenshot/recording requirement remains UNSOLVED
+and the final-sensitive-release CI gate intentionally refuses release.
 
-Main branch: last earlier tested local preview. Development PR #1: latest updates below.
-A green unit test is NOT evidence of a production secure app.
+## Newly implemented/tested
+- Distinct password-encrypted local Ed25519 device identity vaults, using scrypt
+  and AES-256-GCM. The user's passwords are created locally, not hardcoded or
+  shared through GitHub or ChatGPT. No real passwords exist yet.
+- Electron PREVIEW now has first-use setup and password-first unlock, deriving
+  the role automatically from the authenticated encrypted profile instead of
+  exposing a role dropdown every time.
+- Portable vault file resides alongside Windows executable, or at a mounted
+  /Volumes/... root on macOS if launched from that volume. This is NOT proof
+  of removable hardware, correct APFS encryption, or absence of OS caches.
+- Cloud integration test unlocks two encrypted accounts, converts keys to
+  libp2p Noise identities and exchanges authenticated dummy text + Seen + Clear
+  over a third-party relay. No server can read these test frames.
+- 120s after authenticated first Seen; 120s if unseen. The dummy user-facing
+  "Simulate recipient Seen" button is NOT a real remote Seen receipt.
+- Both enrolled participants may issue authenticated Clear & End. Remote
+  deletion is unconfirmed until a separate authenticated peer ACK arrives.
+- Server-side one-active-device-per-role leases, heartbeat and revocation are
+  unit/cloud tested but NOT yet wired to the Electron application.
+- Protected role requires camera+mic for local preview Start. Self-camera
+  preview has been removed, but a clear active-media indicator stays visible.
+- In the dummy app, encrypted identity file removal/change, network offline,
+  lock or suspend are designed to conceal the window and terminate process.
+  USB change is checked by a 500ms poll, not guaranteed hardware removal.
 
-| Requirement | Reality |
-| --- | --- |
-| Two user-created protected account passwords | Per-device AES-GCM/scrypt Ed25519 profile module tested; actual app setup/login UI NOT WIRED and NO user profiles/passwords generated |
-| One active authorized device per account | Leased authorizations, host/protected roles, renewal watchdog and pinned Noise server protocol cloud-tested; application not wired |
-| Encrypted peer-to-peer messaging | libp2p Noise encrypted dummy peer stream cloud-tested; user app GUI not wired |
-| Encrypted live camera and mic | TURN-only WebRTC DTLS-SRTP engine and signalling rules unit-tested; real remote call not connected |
-| Camera/mic Host optional; Protected mandatory | Role policy and local preview now reflect this; actual Mac runtime integration pending |
-| First authenticated Seen -> erase after 120 seconds | Unit tests; local dummy preview simulation; real peer Seen not wired |
-| Unseen -> erase after 120 seconds | Unit tests and dummy preview timer; no long-term store intended |
-| Either participant may Clear & End | Authenticated protocol and local fail-closed/peer ACK code unit-tested; real remote delivery not wired |
-| 0.5-second heartbeat, 3/5-second protection/expiry | Policy code tested; not fully wired into user app |
-| Mac USB removal | Disk Arbitration helper compiles; still NOT bundled, supervised or hardware-tested |
-| Windows capture exclusion | Electron calls setContentProtection before load, effective only for supported capture APIs, not an anti-recording guarantee |
-| Mac capture blocking | UNSOLVED: Electron can be bypassed by ScreenCaptureKit; removable device-wide test profile prepared but not installed or hardware-verified |
-| Root/admin compromise | Local trust hints; no authoritative proof of no compromise on arbitrary devices |
-| Passwords | NONE exist for the user. They must be created on the endpoints after safe login/profile UI integration. NEVER send real passwords in chat. |
-
-## Explicit safety gates
-Do not use dummy snapshot to talk about anything sensitive or grant access to a private peer.
-Never claim remote content was wiped without authenticated peer ACK. OS memory,
-screen recordings by other tools, administrator compromise and offline peer
-copies remain outside what current code can guarantee. No reliable universal
-screenshot-attempt notification is available on desktop operating systems.
-
-## What can be opened now
-A Windows local-only preview can be downloaded from a green PR GitHub Actions
-run, artifact named `Windows-Updated-Dummy-Preview-NOT-SECURE`.
-It is unsigned, has no private network communication and uses simulated Seen.
-Downloaded unsigned programs may trigger Windows security warnings; only use
-on a device you trust after reviewing the source. Do NOT turn off antivirus,
-Windows security controls or Mac Gatekeeper/SIP to run it.
-
-## Remaining before an actual secure prototype
-1. Wire local passphrase enrollment, protected USB profile and Noise pinned
-   peer authentication into Electron main in a limited authenticated IPC surface.
-2. Deploy the restricted relay and TURN service using user-owned provider
-   credentials; do not store credentials in GitHub.
-3. Connect single-device lease, secure frame router, receipt and Clear & End
-   coordinator to real Noise channels, with no session restoration.
-4. Connect real WebRTC DTLS-SRTP media via those authenticated offers/answers.
-5. Bundle and supervise native Mac USB helper and test physically on that Mac.
-6. With owner consent, test macOS device-wide screenshot restriction against
-   built-in and ScreenCaptureKit tools, including recorders already running.
-7. Hardware regression and independent adversarial review. Current
-   zero-recording requirement is a HARD RELEASE BLOCKER.
+## Incomplete or blocked
+- Desktop GUI DOES NOT yet send or receive actual encrypted peer messages,
+  authenticate peer identity, or make live encrypted remote video/audio calls.
+  WebRTC DTLS-SRTP engine and Noise router exist separately.
+- Actual Mac Disk Arbitration USB helper source compiles, but is not bundled,
+  supervised or tested on real encrypted APFS removable hardware.
+- No user-authorized Render/Cloudflare relay and TURN services deployed.
+- Windows screenshot exclusion uses Electron setContentProtection which covers
+  supported OS capture APIs, NOT every capture method. A screenshot file may
+  exist even when the window content is excluded. Microsoft says it is not
+  a strict security or DRM guarantee.
+- macOS Electron protection is bypassed by modern ScreenCaptureKit.
+  An opt-in device-wide allowScreenShot=false sample profile exists but was
+  NOT installed and NOT tested on the user's friend's MacBook.
+- Zero risk of recording on arbitrary laptops cannot be guaranteed.
+  Screenshot attempt detection cannot be universally guaranteed.
+- Root/admin/kernel compromise cannot be reliably ruled out by software-only
+  local OS policy checks; peer alerts require a real authenticated connection.
+- Proper encrypted USB-only runtime data layout, native hardware checks,
+  cloned-identity defense, app signing/notarization, independent security
+  review and adversarial physical testing are release blockers.
+- Do not merge to main or call a green dummy build a secure messenger.
