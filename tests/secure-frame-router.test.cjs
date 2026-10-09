@@ -97,7 +97,7 @@ test('Protected participant can issue authenticated Clear & End',async()=>{
   sendAuthenticated:async()=>true,
   onControl:(frame,meta)=>control.receive(frame,meta),
   onHeartbeat:async()=>true,onRtc:async()=>true});
- assert.equal(await route.receive(mk('control',1,'clear_end'),{noiseRemotePeerId:B}),true);
+ assert.equal(await route.receive(mk('control',1,'clear_end',{requestId:'secure_clear_req_12345'}),{noiseRemotePeerId:B}),true);
  assert.equal(cleared,1);
  assert.equal(await route.receive(mk('control',2,'text',{messageId:'message_123456',text:'late'}),{noiseRemotePeerId:B}),false);
 });

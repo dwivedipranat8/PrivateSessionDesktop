@@ -70,7 +70,7 @@ test('pinned Noise identities carry Seen and Clear & End in a dummy call',{timeo
    assert.equal(hostSawSeen,true);
    now+=119999;assert.deepEqual(receipts.expire(),[]);
    now+=1;assert.deepEqual(receipts.expire(),[messageId]);
-   stream.send(encode({kind:'clear_end',sessionId,sender:hostDevice,seq:2}));
+   stream.send(encode({kind:'clear_end',requestId:'secure_clear_req_12345',sessionId,sender:hostDevice,seq:2}));
    await Promise.race([deleted,new Promise((_r,j)=>setTimeout(()=>j(Error('Delete timeout')),8000))]);
    assert.equal(guestDeleted,true);assert.equal(guestPlaintext,null);
    await stream.close();
