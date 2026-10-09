@@ -1,18 +1,18 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const {ROLES,allowed,hostCanDelete}=require('../core/access-policy.cjs');
-const builder={id:'creator',role:ROLES.BUILDER},partner={id:'p1',role:ROLES.PARTNER},
- partner2={id:'p2',role:ROLES.PARTNER},portable={id:'mac1',role:ROLES.PORTABLE};
-const approvedDeviceIds=new Set(['creator','p1','p2','mac1']);
-test('partner multi-device allowed; builder has no private-chat access',()=>{
- assert.equal(allowed({purpose:'private',left:partner,right:portable,approvedDeviceIds}),true);
- assert.equal(allowed({purpose:'private',left:partner2,right:portable,approvedDeviceIds}),true);
- assert.equal(allowed({purpose:'private',left:builder,right:portable,approvedDeviceIds}),false);
- assert.equal(allowed({purpose:'test',left:builder,right:partner,approvedDeviceIds}),true);
- assert.equal(allowed({purpose:'test',left:builder,right:portable,approvedDeviceIds}),false);
+const {ROLES,allowed,participantCanClearEnd}=require('../core/access-policy.cjs');
+const builder={id:'creator',role:ROLES.BUILDER},host={id:'p1',role:ROLES.PARTNER},
+ protectedDevice={id:'mac1',role:ROLES.PORTABLE},other={id:'other',role:ROLES.PARTNER};
+const approvedDeviceIds=new Set(['creator','p1','mac1']);
+test('approved Host and Protected can communicate; builder cannot join',()=>{
+ assert.equal(allowed({purpose:'private',left:host,right:protectedDevice,approvedDeviceIds}),true);
+ assert.equal(allowed({purpose:'private',left:builder,right:protectedDevice,approvedDeviceIds}),false);
 });
-test('host can delete only if authenticated',()=>{
- assert.equal(hostCanDelete({actor:partner,hostDeviceId:'p1',authenticated:true,purpose:'private'}),true);
- assert.equal(hostCanDelete({actor:portable,hostDeviceId:'p1',authenticated:true,purpose:'private'}),false);
- assert.equal(hostCanDelete({actor:partner,hostDeviceId:'p1',authenticated:false,purpose:'private'}),false);
+test('either participant can Clear & End only if approved and authenticated',()=>{
+ const base={hostDeviceId:'p1',protectedDeviceId:'mac1',approvedDeviceIds,purpose:'private',authenticated:true};
+ assert.equal(participantCanClearEnd({...base,actor:host}),true);
+ assert.equal(participantCanClearEnd({...base,actor:protectedDevice}),true);
+ assert.equal(participantCanClearEnd({...base,actor:builder}),false);
+ assert.equal(participantCanClearEnd({...base,actor:other}),false);
+ assert.equal(participantCanClearEnd({...base,actor:host,authenticated:false}),false);
 });

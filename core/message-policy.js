@@ -13,8 +13,8 @@
       return true;
     }
     expiresAt() {
-      const fallback = this.createdAt + 20000;
-      return this.seenAt === null ? fallback : Math.min(fallback, this.seenAt + 2000);
+      const fallback = this.createdAt + 120000;
+      return this.seenAt === null ? fallback : this.seenAt + 120000;
     }
   }
   if (typeof module !== 'undefined' && module.exports) module.exports = {MessagePolicy};

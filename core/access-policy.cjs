@@ -5,7 +5,8 @@ function allowed({purpose,left,right,approvedDeviceIds}){
  const roles=[left.role,right.role].sort().join('|');
  return purpose==='private' ? roles==='partner|portable' : purpose==='test' && roles==='builder|partner';
 }
-function hostCanDelete({actor,hostDeviceId,authenticated,purpose}){
- return purpose==='private'&&authenticated===true&&actor?.id===hostDeviceId;
+function participantCanClearEnd({actor,hostDeviceId,protectedDeviceId,authenticated,purpose,approvedDeviceIds}){
+ return purpose==='private'&&authenticated===true&&actor?.id!==undefined&&
+  (actor.id===hostDeviceId||actor.id===protectedDeviceId)&&approvedDeviceIds?.has(actor.id)===true;
 }
-module.exports={ROLES,allowed,hostCanDelete};
+module.exports={ROLES,allowed,participantCanClearEnd};
