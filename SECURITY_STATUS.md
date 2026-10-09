@@ -1,51 +1,73 @@
-# Private Session — security development status
+# Private Session Desktop — RELEASE BLOCKED
 
-**NOT READY FOR PRIVATE USE. DO NOT DISTRIBUTE THIS BRANCH.**
+This repository has two distinct states:
+- **main**: user's last tested local-only dummy preview; NOT a secure messenger.
+- **development/security-engine**: unmerged engineering branch; NOT READY for real conversations.
 
-The main branch remains the last user-tested local-only preview (no remote chat).
-This branch is an independently developed, unmerged technical prototype; its
-modules have not been integrated into a working Windows/Mac client.
+## Cloud-tested components (dummy data only)
 
-## Cloud tests completed
-- Local two-node authenticated libp2p Noise message exchange: PASS
-- Two dummy peers exchanging Noise-encrypted data through a third-party circuit relay: PASS
-- Authenticated dummy Seen -> 2-second expiry and host remote Delete over Noise: PASS
-- Peer heartbeat rules (3-second protect / 5-second expire, anti-replay): PASS in unit tests
-- Session-bound control parser, restricted device-role allowlist: PASS in unit tests
-- TURN credential issuance and restricted libp2p relay admission: PASS in cloud integration tests
-- Pure fail-closed session coordinator and seen-visibility eligibility: PASS in unit tests
+- Local and relayed pinned Noise peer-to-peer encrypted messages.
+- Restricted relay admission and Cloudflare temporary TURN credential issuance
+  using mocked provider responses; **not deployed** or proved against provider.
+- AES-256-GCM/scrypt-encrypted Ed25519 per-device profiles; wrong password,
+  altered ciphertext and device fingerprint mismatch tests.
+- Session-bound protected text / Seen / host-only Delete / End control policies.
+- 2-second-after-authenticated-recipient-ack timer, with 30-second unseen cap;
+  actual human reading is not technically provable.
+- 1-second challenge / ~3s protect / ~5s expire policy rules and anti-replay.
+- Independent fail-closed coordinator tests; app runtime integration pending.
+- Evidence-based security-policy refusal; neutral local/peer error, encrypted
+  best-effort alert on suspected policy failure. Sender cannot claim peer ACK
+  until authenticated ACK is actually received; offline peer may not receive.
+- TURN-only WebRTC DTLS-SRTP call engine with authenticated SDP/fingerprint and
+  restricted ICE; source + mocked unit tests, not a real two-machine video call.
+- Windows Electron best-effort capture exclusion requested before UI load.
+- macOS Disk Arbitration guard native source compiled on hosted Mac runner,
+  not embedded, supervised, signed, or physically tested on real USB.
 
-## Source implemented, still NOT integrated or physically tested
-- Electron window capture exclusion requested before any app UI content.
-- WebRTC DTLS-SRTP relay-only call engine, requiring authenticated Noise signalling.
-- Server package for Render that admits only enrolled device IDs, relays Noise
-  connections and issues short-lived Cloudflare TURN credentials.
-- Basic stop/clear/key-disposal coordination and message receipt policies.
+## Release blockers that are NOT yet solved
 
-## Missing before even a dummy two-device Windows/Mac demonstration
-- Identity creation, protected profile storage and QR/verified peer enrollment.
-- Install and wire the secure Noise relay-client engine into Electron main process.
-- Authenticated Start approval, data channel and WebRTC signalling between actual devices.
-- Complete UI read receipts and host control over that authenticated channel.
-- Real USB-dependent portable Mac app with native Disk Arbitration supervision.
-- Persistent server deployment on a user-authorized Render account and optional
-  Cloudflare TURN key (server-side only). The server is not running anywhere.
-- Release signing/notarization, documented recovery, pin/revocation, endpoint
-  integrity checks and regression coverage.
-- Physical Windows/Mac screenshot, recording, camera/mic, network loss, removable
-  drive removal and crash testing. Security review by qualified independent reviewer.
+1. **Actual GUI integration:** The Electron app is still a local dummy preview.
+   Pinned Noise clients, encrypted profiles, sender/receiver read receipts,
+   host remote clear, live media and 1/3/5-second session stop are not wired
+   into one working Windows/Mac call. No final build exists.
+2. **Actual hosting:** Render relay + Cloudflare TURN credentials still need
+   account provisioning, static identity configuration, admission tests and
+   billing controls. Secrets must not be committed. Cloud-only mocked tests
+   do not substitute for real deployed-host testing.
+3. **Approved identities:** In-person public-key comparison and QR enrollment,
+   per-device revocation, Friend 2 multidevice approval and exact three-person
+   authorization must all be tested end-to-end. Developer must have NO
+   automatic access to the two friends' private plaintext.
+4. **Mac USB:** Only a compiled observer prototype exists. Must bundle,
+   supervise, bind to actually enrolled external volume/profile and run
+   emergency removal/eject/hub/corruption/lock/crash tests ON THE ACTUAL MAC.
+5. **Screen capture:** Newer macOS ScreenCaptureKit can record Electron window
+   despite setContentProtection. Windows uses WDA_EXCLUDEFROMCAPTURE on a
+   documented set of normal capture APIs, not all possible software/hardware
+   recording. The user's requested UNIVERSAL anti-recording guarantee cannot
+   be honestly marked PASS with the planned macOS architecture.
+6. **Root/admin control:** Compromised operating-system kernel can falsify local
+   policy evidence. Basic SIP/Gatekeeper/Windows Secure Boot checks help reject
+   detectable failures; they DO NOT prove absence of malware/root. If signals
+   fail, refuse chat and try to send an authenticated peer alert, but an offline
+   device cannot receive an instant notice.
+7. **Signing / release:** Proper notarization/signing, dependency and package
+   audits, supply-chain/version pinning, Mac hardware testing, supported
+   security-patched OS and independent review not completed.
+8. **Windows 10:** Windows 10 22H2 passed ordinary support end in Oct 2025.
+   Release must require verified extended updates or a supported upgrade.
+9. **Testing:** More extensive timing, reconnect, dynamic USB removal,
+   replay, muting, screen recorder pre/post, prolonged call, TURN UDP/TCP/TLS,
+   server outage, app crash, restore/rollback and hostile endpoint tests.
+   No guarantee that every bug has been found.
 
-## Platform limits that cannot be solved by ordinary app code
-- Newer macOS ScreenCaptureKit capture can bypass Electron window protections.
-- Windows capture exclusion protects only compliant OS routes; hardware and hostile
-  privileged capture remain.
-- An offline remote peer cannot receive an immediate remote Delete. Independently
-  enforced local timers/end session are still required.
-- OS traces, memory/swap remnants, kernel compromise, copied ordinary USB are not
-  absolutely preventable/detectable.
+## Safe build workflow
 
-## User instruction
-Do not ask user to download iterative builds. Continue work in this private
-development branch, use GitHub Actions/cloud dummy-data tests, and keep main
-unchanged until integrated prototype has been reviewed. Actual Mac/USB testing
-and provider provisioning must still be undertaken before a sensitive release.
+- Do not request user to download every engineering version.
+- Keep main unchanged until integration and security-review gates.
+- Use isolated dummy-data cloud tests, including Windows and Mac packaging.
+- Never claim a green build is a trusted private messenger.
+- User's friend should not change Mac startup security, unlock bootloaders,
+  disable Gatekeeper/SIP/antivirus, or install unknown root certificates.
+- Do not use real personal chat, passwords or camera calls on incomplete builds.
