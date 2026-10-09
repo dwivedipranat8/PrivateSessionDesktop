@@ -19,6 +19,9 @@ function isAvailable(p){
  try{return fs.statSync(p).isDirectory()&&Array.isArray(fs.readdirSync(p));}catch{return false;}
 }
 function guardReady(){
+ // Demo-only folder simulation; neither volume identity nor encryption is
+ // verified here. Real protected profile must be bound to enrolled USB.
+ if(role==='guest'&&!folder)return {ok:false,error:'Protected preview needs a selected USB test folder'};
  if(folder&&!isAvailable(folder))return {ok:false,error:'Test USB folder unavailable'};
  if(!net.isOnline())return {ok:false,error:'Network reports offline'};
  return {ok:true};
@@ -47,7 +50,7 @@ app.whenReady().then(()=>{
    return {ok:true};
  });
  register('start',()=>{
-   if(process.platform==='win32' && !win?.isContentProtected())return {ok:false,error:'Window capture exclusion unavailable'};
+   if(role==='guest'&&process.platform==='win32' && !win?.isContentProtected())return {ok:false,error:'Window capture exclusion unavailable'};
    if(demo.active)return {ok:false,error:'Session already active'};
    if(role==='guest'&&Date.now()>=mediaDeadline)return {ok:false,error:'Protected view requires camera and microphone'};
    const check=guardReady();if(!check.ok){mediaDeadline=0;return check;}
@@ -56,7 +59,7 @@ app.whenReady().then(()=>{
  register('stop',()=>stop('Ended locally'));
  register('fail',()=>stop('Simulated failure'));
  register('set-role',next=>{
-   if(demo.active||!['host','guest'].includes(next))return {ok:false};
+   if(demo.active||Date.now()<mediaDeadline||!['host','guest'].includes(next))return {ok:false};
    role=next;return {ok:true,role};
  });
  register('clear-end',()=>{
@@ -100,7 +103,7 @@ app.whenReady().then(()=>{
    if(!demo.active)return;
    const result=guardReady();
    if(!result.ok)stop(result.error);
- },750);
+ },500);
 });
 app.on('before-quit',()=>{stop('App quit');if(interval)clearInterval(interval);});
 app.on('window-all-closed',()=>app.quit());

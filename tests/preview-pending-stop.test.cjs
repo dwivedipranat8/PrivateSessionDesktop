@@ -19,3 +19,11 @@ test('both preview roles may Clear & End but preview never claims remote deletio
  assert.match(src,/Cleared & ended locally \(dummy preview only\)/);
  assert.equal(src.includes("register('delete-chat'"),false);
 });
+
+test('protected local preview requires selected USB folder and never claims encryption',()=>{
+ const main=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
+ assert.match(main,/role==='guest'&&!folder/);
+ assert.match(main,/},500\);/);
+ const html=fs.readFileSync(path.join(__dirname,'../ui/index.html'),'utf8');
+ assert.match(html,/does not prove a genuine encrypted USB device/);
+});
