@@ -52,6 +52,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Compile native Mac removable-volume guard (compile only)
+        run: swiftc -O -framework DiskArbitration native/macos/VolumeGuard.swift -o /tmp/PrivateSessionVolumeGuard
       - run: npm install --no-audit --no-fund
       - run: npm run build:mac
         env:
