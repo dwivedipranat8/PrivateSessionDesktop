@@ -28,9 +28,12 @@ export async function createPrivateRelay({privateKey,enrolled,issuer,port=0,host
   addresses.announce=['/dns4/'+announceHost+'/tcp/443/tls/ws'];
  }
  let node=null;
- const sessions=accounts||new AccountSessions({enrolled,onRevoked:({peerId})=>{
-  // Best-effort immediate disruption of the superseded device's relay link.
-  // Endpoint MUST independently expire its own lease, including while offline.
+ const sessions=accounts||new AccountSessions({enrolled,onRevoked:({peerId,role})=>{
+  // The new session can use the SAME PeerID when an approved device logs in
+  // again. Do not kill its requesting connection indiscriminately.
+  // We cannot cryptographically distinguish two clones of the same key:
+  // the client's generation-bound lease watchdog remains mandatory.
+  if(sessions.active.get(role)?.peerId===peerId)return;
   for(const connection of node?.getConnections?.()||[]){
    if(connection.remotePeer.toString()===peerId)
     Promise.resolve(connection.close()).catch(()=>{});
@@ -86,7 +89,16 @@ export async function createPrivateRelay({privateKey,enrolled,issuer,port=0,host
    stream.abort(Error('No active account lease'));return;
   }
   try{
+   const active=sessions.active.get(sessions.roleFor(authenticatedPeer));
+   if(!active||!sessions.isActive({authenticatedPeerId:authenticatedPeer,
+       sessionId:active.sessionId,generation:active.generation}))
+    throw Error('Account authorization unavailable');
    const temporary=await issuer(authenticatedPeer);
+   // The earlier approval may have been superseded while waiting for the
+   // external TURN provider. Never disclose newly issued credentials then.
+   if(!sessions.isActive({authenticatedPeerId:authenticatedPeer,
+       sessionId:active.sessionId,generation:active.generation}))
+    throw Error('Authorization revoked during issuance');
    const encoded=new TextEncoder().encode(JSON.stringify(temporary));
    if(encoded.length>16000)throw Error('TURN provider returned oversized response');
    const framed=lpStream(stream);
@@ -96,6 +108,9 @@ export async function createPrivateRelay({privateKey,enrolled,issuer,port=0,host
    stream.abort(Error('Credential unavailable'));
   }
  });
+ const sweeper=setInterval(()=>sessions.sweep(),500);
+ sweeper.unref?.();
+ node.addEventListener?.('stop',()=>clearInterval(sweeper),{once:true});
  return node;
 }
 

@@ -48,3 +48,27 @@ test('two independently approved host devices cannot hold concurrent leases',{ti
   assert.equal((await command(protectedPeer,'renew',{sessionId:p.sessionId,generation:p.generation})).ok,true);
  }finally{await Promise.allSettled([host1.stop(),host2.stop(),protectedPeer.stop(),server?.stop()]);}
 });
+
+test('same authorized device may replace its own login without killing current Noise connection',{timeout:30000},async()=>{
+ const create=()=>createLibp2p({addresses:{listen:[]},transports:[webSockets()],
+  connectionEncrypters:[noise()],streamMuxers:[yamux()]});
+ const host=await create(),enrolled=new Map([[host.peerId.toString(),'partner']]);
+ let service;
+ try{
+  service=await createPrivateRelay({privateKey:await generateKeyPair('Ed25519'),
+   enrolled,issuer:async()=>({iceServers:[]}),port:0,host:'127.0.0.1'});
+  const connection=await host.dial(service.getMultiaddrs()[0]);
+  async function begin(){
+   const stream=await host.dialProtocol(service.peerId,'/private-session/account-lease/1.0.0');
+   const lp=lpStream(stream);
+   await lp.write(new TextEncoder().encode(JSON.stringify({operation:'begin'})));
+   const v=JSON.parse(new TextDecoder().decode((await lp.read()).subarray()));
+   await stream.close();return v;
+  }
+  const first=await begin();
+  const second=await begin();
+  assert.equal(second.ok,true);
+  assert.notEqual(first.generation,second.generation);
+  assert.equal(connection.remotePeer.toString(),service.peerId.toString());
+ }finally{await Promise.allSettled([host.stop(),service?.stop()]);}
+});
