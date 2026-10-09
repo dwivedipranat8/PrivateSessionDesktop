@@ -36,7 +36,7 @@ test('encrypted profile passwords recover pinned identities that exchange authen
   relay=await createLibp2p({addresses:{listen:['/ip4/127.0.0.1/tcp/0/ws']},
    transports:[webSockets()],connectionEncrypters:[noise()],streamMuxers:[yamux()],
    services:{identify:identify(),relay:circuitRelayServer()}});
-  host=await createPinnedClient({privateKey:hostKey,sessionId:SID,onFrame:(frame,auth)=>{
+  host=await createPinnedClient({privateKey:hostKey,sessionId:SID,requireServerLease:false,onFrame:(frame,auth)=>{
    if(frame.kind==='seen'&&auth.noiseRemotePeerId===portable.peerId&&frame.messageId===MSG){
     seen=receipts.seen({sessionId:SID,id:MSG,deviceId:portable.peerId},{authenticated:true});
     return seen;
@@ -46,7 +46,7 @@ test('encrypted profile passwords recover pinned identities that exchange authen
    }
    return false;
   }});
-  portable=await createPinnedClient({privateKey:protectedKey,sessionId:SID,onFrame:async(frame,auth)=>{
+  portable=await createPinnedClient({privateKey:protectedKey,sessionId:SID,requireServerLease:false,onFrame:async(frame,auth)=>{
    if(auth.noiseRemotePeerId!==host.peerId||frame.kind!=='text'||frame.messageId!==MSG)return false;
    return portable.send({kind:'seen',sessionId:SID,sender:portable.peerId,seq:1,messageId:MSG});
   }});
