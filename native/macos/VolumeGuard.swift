@@ -84,15 +84,17 @@ func main() {
     let context = Unmanaged.passUnretained(guardObject).toOpaque()
     DARegisterDiskDisappearedCallback(daSession, nil, diskChanged, context)
     DARegisterDiskDescriptionChangedCallback(daSession, nil, nil, diskDescriptionChanged, context)
-    DASessionScheduleWithRunLoop(daSession, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode!)
-
-    let periodic = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { _ in
+    // Use a serial dispatch queue for disk callbacks and periodic checks,
+    // avoiding cross-thread races and deprecated run-loop mode bridging.
+    DASessionSetDispatchQueue(daSession, DispatchQueue.main)
+    let periodic = DispatchSource.makeTimerSource(queue: DispatchQueue.main)
+    periodic.schedule(deadline: .now() + .milliseconds(250), repeating: .milliseconds(250))
+    periodic.setEventHandler {
         guardObject.check()
     }
-    withExtendedLifetime(periodic) {
-        guardObject.check()
-        RunLoop.current.run()
-    }
+    periodic.resume()
+    guardObject.check()
+    dispatchMain()
 }
 
 main()
