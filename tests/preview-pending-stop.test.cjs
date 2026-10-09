@@ -63,3 +63,14 @@ test('emergency loss conceals window and terminates program without renderer ACK
  assert.match(emergency,/app\.exit\(0\)/);
  assert.match(main,/fileSignature\(profile\.profilePath\)!==profileFileSignature/);
 });
+
+test('portable app checks original Windows pen-drive EXE location, not unpacked temp',()=>{
+ const code=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
+ assert.match(code,/PORTABLE_EXECUTABLE_FILE/);
+ assert.match(code,/profileFileSignature=result\.role==='protected'\?fileSignature\(result\.profilePath\):null/);
+});
+test('network loss closes an unlocked app even before Start',()=>{
+ const code=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
+ assert.match(code,/if\(profile&&!net\.isOnline\(\)\)/);
+ assert.match(code,/emergencyQuit\('Network unavailable'\)/);
+});

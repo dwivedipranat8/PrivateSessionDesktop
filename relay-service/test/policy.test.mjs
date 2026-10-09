@@ -8,11 +8,11 @@ const sample=JSON.stringify([
  {peerId:'12D3KooWDDDddd1234567890',role:'portable'},
  {peerId:'12D3KooWEEEeee1234567890',role:'partner',revoked:true}
 ]);
-test('builder may test partner, but cannot access portable conversations',()=>{
+test('builder is never authorized for either private participant',()=>{
  const m=parseEnrolled(sample);
  assert.equal(admit(m,'12D3KooWEEEeee1234567890'),false);
  assert.equal(permittedPair(m,'12D3KooWAAAaaa1234567890','12D3KooWDDDddd1234567890'),false);
- assert.equal(permittedPair(m,'12D3KooWAAAaaa1234567890','12D3KooWBBBbbb1234567890'),true);
+ assert.equal(permittedPair(m,'12D3KooWAAAaaa1234567890','12D3KooWBBBbbb1234567890'),false);
 });
 test('separately approved partner devices allowed private pairing only',()=>{
  const m=parseEnrolled(sample);

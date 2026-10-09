@@ -12,7 +12,11 @@ function profileLibrary(){
 }
 function hostProfilePath(){return path.join(app.getPath('userData'),'PrivateSession.identity.enc.json');}
 function portableProfilePath(){
- const executable=path.resolve(process.execPath);
+ // Portable Windows electron-builder unpacks process.execPath into a temp
+ // directory. PORTABLE_EXECUTABLE_FILE is the original EXE on the actual drive.
+ const launched=process.platform==='win32'?process.env.PORTABLE_EXECUTABLE_FILE:process.execPath;
+ if(!launched)return null;
+ const executable=path.resolve(launched);
  if(process.platform==='darwin'){
   const match=/^\/Volumes\/[^/]+\//.exec(executable);
   if(!match)return null; // Protected app MUST run from a mounted volume.
@@ -127,6 +131,8 @@ app.whenReady().then(()=>{
     if(epoch!==authEpoch){lib.clearUnlockedProfile(result);return {ok:false,error:'Unlock cancelled'};}
     profile=result;role=result.role==='protected'?'guest':'host';
     folder=result.role==='protected'?path.dirname(result.profilePath):null;
+    profileFileSignature=result.role==='protected'?fileSignature(result.profilePath):null;
+    if(result.role==='protected'&&!profileFileSignature){wipeProfile();return {ok:false,error:'Protected profile unavailable'};}
     return {ok:true,role,unlocked:true};
    }catch{return {ok:false,error:'Incorrect password or encrypted profile not available'};}
  });
@@ -185,6 +191,9 @@ app.whenReady().then(()=>{
    if(profile&&role==='guest'&&(!profileFileSignature||
      fileSignature(profile.profilePath)!==profileFileSignature)){
     emergencyQuit('Encrypted profile drive removed or changed');return;
+   }
+   if(profile&&!net.isOnline()){
+    emergencyQuit('Network unavailable');return;
    }
    if(!demo.active)return;
    const result=guardReady();

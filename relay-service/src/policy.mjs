@@ -21,7 +21,7 @@ export function parseEnrolled(text){
 export function permittedPair(enrolled,a,b){
  if(!a||!b||a===b||!enrolled.has(a)||!enrolled.has(b))return false;
  const roles=[enrolled.get(a),enrolled.get(b)].sort().join('|');
- return roles==='partner|portable'||roles==='builder|partner';
+ return roles==='partner|portable';
 }
 export function admit(enrolled,peer){
  return typeof peer==='string'&&enrolled.has(peer);
