@@ -26,13 +26,14 @@ test('TURN-only media, fresh certificate and explicitly approved local tracks',a
  sendAuthenticated:e=>{sent.push(e);},rtcCtor:f.RTC});
  await call.prepare({localStream:s,iceServers:[{urls:'turns:relay.example.org:5349',username:'temp',credential:'temp'}],initiator:true});
  assert.equal(f.made[0].configuration.iceTransportPolicy,'relay');
+ assert.equal(typeof f.made[0].ondatachannel,'undefined');
  assert.equal(sent[0].kind,'offer');assert.equal(sent[0].sessionId,SESSION);
  call.end();assert.equal(s.getTracks().every(t=>t.readyState==='ended'),true);
 });
 test('reject unauthenticated or wrong peer/session SDP',async()=>{
  const f=fake(),sent=[],call=new RTCCall({sessionId:SESSION,localDeviceId:LOCAL,peerDeviceId:PEER,
  sendAuthenticated:e=>{sent.push(e);},rtcCtor:f.RTC});
- await call.prepare({localStream:media(),iceServers:[{urls:'turn:relay.example.org:3478'}]});
+ await call.prepare({localStream:media(),iceServers:[{urls:'turn:relay.example.org:3478',username:'temp',credential:'temp'}]});
  const e={kind:'offer',sessionId:SESSION,senderDevice:PEER,seq:1,sdp:'v=0\na=fingerprint:sha-256 FF\n'};
  assert.equal(await call.acceptSignal(e),false);
  assert.equal(await call.acceptSignal({...e,senderDevice:'attacker_7777777'},{fromAuthenticatedPinnedNoisePeer:true}),false);
@@ -48,5 +49,20 @@ test('reject STUN-only and no camera or mic',async()=>{
 test('wrong session cannot send plaintext without active authenticated channel',()=>{
  const f=fake(),c=new RTCCall({sessionId:SESSION,localDeviceId:LOCAL,peerDeviceId:PEER,
  sendAuthenticated:async()=>{},rtcCtor:f.RTC});
- assert.equal(c.sendText('hi'),false);c.end();
+ assert.equal(typeof c.sendText,'undefined');c.end();
+});
+
+test('cannot pass STUN URL concealed inside a mixed TURN list',async()=>{
+ const f=fake(),c=new RTCCall({sessionId:SESSION,localDeviceId:LOCAL,peerDeviceId:PEER,
+   sendAuthenticated:async()=>{},rtcCtor:f.RTC});
+ await assert.rejects(c.prepare({localStream:media(),iceServers:[
+  {urls:['turn:relay.example.org:3478','stun:insecure.example.org'],username:'temp',credential:'temp'}]}));
+});
+test('out-of-order authenticated session frames do not advance sequence',async()=>{
+ const f=fake(),c=new RTCCall({sessionId:SESSION,localDeviceId:LOCAL,peerDeviceId:PEER,
+   sendAuthenticated:async()=>{},rtcCtor:f.RTC});
+ await c.prepare({localStream:media(),iceServers:[{urls:'turns:relay.example.org:5349',username:'temp',credential:'temp'}]});
+ const frame={kind:'end',sessionId:SESSION,senderDevice:PEER,seq:4};
+ assert.equal(await c.acceptSignal(frame,{fromAuthenticatedPinnedNoisePeer:true}),false);
+ assert.equal(await c.acceptSignal({...frame,seq:1},{fromAuthenticatedPinnedNoisePeer:true}),true);
 });

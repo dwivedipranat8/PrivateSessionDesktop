@@ -7,30 +7,31 @@
  * is accepted. Constructing this class alone does not create that stream.
  *
  * Every SDP/fingerprint/ICE frame is bound to session and approved device.
+ * No text DataChannel is created; text/control must use authenticated Noise.
  * ICE relay-only prevents peer-to-peer candidate fallback, but needs temporary
  * TURN credentials supplied securely after enrollment.
  */
 (function init(root){
- const MAX_SDP=64000,MAX_ICE=8192,MAX_TEXT=2048;
+ const MAX_SDP=64000,MAX_ICE=8192;
  function requireId(v){return typeof v==='string'&&v.length>=12&&v.length<=150&&/^[A-Za-z0-9_-]+$/.test(v);}
  function isOffer(o,type){return o&&o.type===type&&typeof o.sdp==='string'&&
    o.sdp.length>20&&o.sdp.length<=MAX_SDP&&o.sdp.includes('a=fingerprint:');}
  function peerFrame(frame,sessionId,peerId,lastSeq){
   return frame&&frame.sessionId===sessionId&&frame.senderDevice===peerId&&
-    Number.isSafeInteger(frame.seq)&&frame.seq>lastSeq&&frame.seq<=Number.MAX_SAFE_INTEGER;
+    Number.isSafeInteger(frame.seq)&&frame.seq===lastSeq+1;
  }
  class RTCCall {
-  constructor({sessionId,localDeviceId,peerDeviceId,sendAuthenticated,onMessage,onRemoteMedia,onStop,
+  constructor({sessionId,localDeviceId,peerDeviceId,sendAuthenticated,onRemoteMedia,onStop,
    rtcCtor,certificateFactory}={}){
    if(!requireId(sessionId)||!requireId(localDeviceId)||!requireId(peerDeviceId)||
       localDeviceId===peerDeviceId)throw Error('Pinned session and both devices required');
    if(typeof sendAuthenticated!=='function')throw Error('Authenticated Noise transport required');
    this.sessionId=sessionId;this.localDeviceId=localDeviceId;this.peerDeviceId=peerDeviceId;
-   this.send=sendAuthenticated;this.onMessage=onMessage||(()=>{});
+   this.send=sendAuthenticated;
    this.onRemoteMedia=onRemoteMedia||(()=>{});this.onStop=onStop||(()=>{});
    this.RTC=rtcCtor||root.RTCPeerConnection;
    this.certificateFactory=certificateFactory||this.RTC?.generateCertificate?.bind(this.RTC);
-   this.pc=null;this.channel=null;this.localStream=null;this.lastReceivedSeq=0;this.nextSeq=1;
+   this.pc=null;this.localStream=null;this.lastReceivedSeq=0;this.nextSeq=1;
    this.closed=false;this.ready=false;
   }
   async prepare({localStream,iceServers,initiator=false}={}){
@@ -38,8 +39,11 @@
    if(!localStream||!localStream.getVideoTracks?.().some(t=>t.readyState==='live')||
      !localStream.getAudioTracks?.().some(t=>t.readyState==='live'))throw Error('Camera and mic required');
    if(!Array.isArray(iceServers)||iceServers.length===0||
-     iceServers.some(s=>!s.urls||!/turns?:/.test(Array.isArray(s.urls)?s.urls.join(' '):s.urls)))
-     throw Error('TURN servers required; STUN-only/direct is forbidden');
+     iceServers.some(s=>{
+       const urls=Array.isArray(s?.urls)?s.urls:[s?.urls];
+       return urls.length===0||urls.some(u=>typeof u!=='string'||!/^turns?:/i.test(u))||
+         typeof s.username!=='string'||!s.username||typeof s.credential!=='string'||!s.credential;
+     }))throw Error('Temporary TURN credentials required; STUN/direct fallback forbidden');
    if(!this.RTC||!this.certificateFactory)throw Error('Secure WebRTC unavailable');
    const certificate=await this.certificateFactory({name:'ECDSA',namedCurve:'P-256'});
    if(this.closed)throw Error('Session already ended');
@@ -59,26 +63,15 @@
     if(state==='connected')this.ready=true;
    };
    if(initiator){
-     const dc=this.pc.createDataChannel('chat',{ordered:true});
-     this.setupData(dc);
      const offer=await this.pc.createOffer();
      await this.pc.setLocalDescription(offer);
      await this.sendFrame({kind:'offer',sdp:offer.sdp});
    }else{
-     this.pc.ondatachannel=e=>{
-       if(this.closed||e.channel.label!=='chat'){e.channel.close();return;}
-       this.setupData(e.channel);
-     };
+     // Chat/control MUST stay on the authenticated Noise channel, never on
+     // a separate WebRTC data channel without the same session authorization.
+     this.pc.ondatachannel=e=>e.channel.close();
    }
    return true;
-  }
-  setupData(dc){
-   this.channel=dc;
-   dc.onmessage=e=>{
-    if(this.closed||!this.ready||typeof e.data!=='string'||e.data.length>MAX_TEXT)return;
-    this.onMessage(e.data);
-   };
-   dc.onclose=()=>{if(!this.closed)this.end('Text connection lost');};
   }
   async sendFrame(payload){
    if(this.closed)throw Error('Session closed');
@@ -111,20 +104,14 @@
      this.lastReceivedSeq=envelope.seq;return true;
    }catch{this.end('Invalid authenticated media setup');return false;}
   }
-  sendText(text){
-   if(this.closed||!this.ready||this.channel?.readyState!=='open'||typeof text!=='string'||
-      text.length>MAX_TEXT)return false;
-   this.channel.send(text);return true;
-  }
   end(reason='Ended'){
    if(this.closed)return;
    this.closed=true;this.ready=false;
-   try{this.channel?.close();}catch{}
    try{if(this.pc){this.pc.ontrack=null;this.pc.onicecandidate=null;this.pc.onconnectionstatechange=null;this.pc.close();}}catch{}
    // Caller is responsible for the shared capture stream; close it on every end.
    try{this.localStream?.getTracks().forEach(t=>t.stop());}catch{}
    this.onRemoteMedia([],null);this.onStop(reason);
-   this.pc=null;this.localStream=null;this.channel=null;
+   this.pc=null;this.localStream=null;
   }
  }
  if(typeof module!=='undefined'&&module.exports)module.exports={RTCCall};

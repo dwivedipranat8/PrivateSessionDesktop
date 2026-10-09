@@ -3,7 +3,7 @@ const {execFile}=require('node:child_process');
 const {promisify}=require('node:util');
 const exec=promisify(execFile);
 const WIN_COMMAND=[
-  '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass',
+  '-NoProfile','-NonInteractive',
   '-Command','try { if (Confirm-SecureBootUEFI) { "ENABLED" } else { "DISABLED" } } catch { "UNKNOWN" }'
 ];
 async function run(command,args,{runCommand=exec}={}){

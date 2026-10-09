@@ -16,10 +16,16 @@ test('known compromise refuses with neutral local and peer errors',()=>{
 });
 test('macOS needs SIP, Gatekeeper and separate boot evidence',()=>{
  const mac={...full,platform:'darwin',sipEnabled:true,gatekeeperEnabled:true};
- assert.equal(evaluateDeviceTrust(mac).allowed,true);
+ assert.equal(evaluateDeviceTrust(mac).allowed,false);
+ assert.equal(evaluateDeviceTrust(mac,{captureRequirement:'best_effort'}).allowed,true);
  assert.equal(evaluateDeviceTrust({...mac,gatekeeperEnabled:false}).allowed,false);
  assert.equal(evaluateDeviceTrust({...mac,verifiedBootEvidence:null}).allowed,false);
 });
 test('no policy result is proof of no root-level attacker',()=>{
  assert.equal(evaluateDeviceTrust(full).proofOfNoRoot,false);
+});
+
+test('absolute screenshot/recorder requirement cannot be marked passed',()=>{
+ assert.equal(evaluateDeviceTrust(full,{captureRequirement:'all_recorders'}).allowed,false);
+ assert.equal(evaluateDeviceTrust({...full,platform:'darwin',sipEnabled:true,gatekeeperEnabled:true}).allowed,false);
 });
