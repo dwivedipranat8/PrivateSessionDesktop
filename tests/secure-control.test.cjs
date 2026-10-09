@@ -51,3 +51,22 @@ test('acknowledgement of remote clear is accepted only from pinned peer',()=>{
  assert.equal(c.receive(frame,{noiseRemoteDeviceId:approvedRemoteDevice}),true);
  assert.deepEqual(events,['secure_clear_req_12345']);
 });
+
+test('explicitly rejected authenticated text closes control session',()=>{
+ const rejected=new SecureControl({sessionId,approvedRemoteDevice,
+   hostDeviceId:'my-device-01',localDeviceId:'my-device-01',onText:()=>false});
+ const frame={kind:'text',sessionId,sender:approvedRemoteDevice,seq:1,
+   messageId:'approved_msg_12345',text:'test only'};
+ assert.equal(rejected.receive(frame,{noiseRemoteDeviceId:approvedRemoteDevice}),false);
+ assert.equal(rejected.ended,true);
+ assert.equal(rejected.receive({...frame,seq:2},{noiseRemoteDeviceId:approvedRemoteDevice}),false);
+});
+test('handler exceptions are fail-closed, not accepted',()=>{
+ const broken=new SecureControl({sessionId,approvedRemoteDevice,
+   hostDeviceId:'my-device-01',localDeviceId:'my-device-01',
+   onText:()=>{throw Error('Inbox unavailable');}});
+ const frame={kind:'text',sessionId,sender:approvedRemoteDevice,seq:1,
+   messageId:'approved_msg_12345',text:'test only'};
+ assert.equal(broken.receive(frame,{noiseRemoteDeviceId:approvedRemoteDevice}),false);
+ assert.equal(broken.ended,true);
+});

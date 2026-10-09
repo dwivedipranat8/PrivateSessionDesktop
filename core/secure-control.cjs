@@ -24,13 +24,29 @@ class SecureControl {
   if(frame.kind==='seen'&&(typeof frame.messageId!=='string'||frame.messageId.length<12))return false;
   if(frame.kind==='text'&&(typeof frame.messageId!=='string'||frame.messageId.length<12||
      typeof frame.text!=='string'||frame.text.length>2048))return false;
+  // Authenticated transport frames are not accepted merely because the
+  // envelope is valid: a bounded inbox / session handler may explicitly
+  // reject the message. Reject and end the control session on that refusal.
+  let accepted;
+  try{
+   if(frame.kind==='clear_end'){this.ended=true;accepted=this.onClearEnd(frame.requestId);}
+   else if(frame.kind==='clear_ack')accepted=this.onClearAck(frame.requestId);
+   else if(frame.kind==='end'){this.ended=true;accepted=this.onEnd();}
+   else if(frame.kind==='security_fail'){
+    this.ended=true;
+    accepted=this.onSecurityFailure('Peer device security requirements not satisfied.');
+   }
+   else if(frame.kind==='seen')accepted=this.onSeen(frame.messageId);
+   else if(frame.kind==='text')accepted=this.onText(frame.messageId,frame.text);
+  }catch{
+   this.ended=true;
+   return false;
+  }
+  if(accepted===false||accepted&&typeof accepted.then==='function'){
+   this.ended=true;
+   return false;
+  }
   this.lastSequence=frame.seq;
-  if(frame.kind==='clear_end'){this.ended=true;this.onClearEnd(frame.requestId);}
-  else if(frame.kind==='clear_ack')this.onClearAck(frame.requestId);
-  else if(frame.kind==='end'){this.ended=true;this.onEnd();}
-  else if(frame.kind==='security_fail'){this.ended=true;this.onSecurityFailure('Peer device security requirements not satisfied.');}
-  else if(frame.kind==='seen')this.onSeen(frame.messageId);
-  else if(frame.kind==='text')this.onText(frame.messageId,frame.text);
   return true;
  }
  end(){this.ended=true;}
