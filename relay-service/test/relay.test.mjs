@@ -37,6 +37,9 @@ test('only Noise-authorized endpoint obtains temporary TURN credentials',{timeou
    signal:AbortSignal.timeout(8000)
   });
   const lp=lpStream(stream);
+  await lp.write(new TextEncoder().encode(JSON.stringify({
+    sessionId:leaseReply.sessionId,generation:leaseReply.generation
+  })));
   const received=await lp.read({signal:AbortSignal.timeout(8000)});
   assert.deepEqual(JSON.parse(new TextDecoder().decode(received.subarray())),credentials);
   await stream.close();

@@ -61,3 +61,16 @@ test('old/revoked devices lose TURN and relay eligibility before generation reus
  assert.equal(r.accounts.isCurrentDevice(b),true);
  r.enrolled.delete(b);assert.equal(r.accounts.isCurrentDevice(b),false);
 });
+
+test('expired generation is removed before revocation callback is issued',()=>{
+ let tick=100, observed=null;
+ const enrolled=new Map([[a,'partner']]);
+ let s;
+ s=new AccountSessions({enrolled,clock:()=>tick,
+  makeId:()=>('account-session-token-xyz').padEnd(30,'x'),
+  onRevoked:()=>{observed=s.isCurrentDevice(a);}});
+ const lease=s.begin({authenticatedPeerId:a});
+ tick+=3000;
+ assert.equal(s.isActive({...lease,authenticatedPeerId:a}),false);
+ assert.equal(observed,false);
+});

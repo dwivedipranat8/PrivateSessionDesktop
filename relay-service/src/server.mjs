@@ -83,25 +83,25 @@ export async function createPrivateRelay({privateKey,enrolled,issuer,port=0,host
   }
  });
  await node.handle(TURN_PROTOCOL,async(stream,connection)=>{
-  // Only a peer already authenticated by Noise can reach the protocol.
   const authenticatedPeer=connection.remotePeer.toString();
-  if(!sessions.isCurrentDevice(authenticatedPeer)){
-   stream.abort(Error('No active account lease'));return;
-  }
   try{
-   const active=sessions.active.get(sessions.roleFor(authenticatedPeer));
-   if(!active||!sessions.isActive({authenticatedPeerId:authenticatedPeer,
-       sessionId:active.sessionId,generation:active.generation}))
-    throw Error('Account authorization unavailable');
+   // A PeerID alone is not sufficient: a copied device identity could have
+   // been logged out by an account takeover. Require the specific lease token.
+   const framed=lpStream(stream);
+   const request=await framed.read({signal:AbortSignal.timeout(8000)});
+   const raw=request.subarray();
+   if(raw.length===0||raw.length>1024)throw Error('Invalid lease request');
+   const proof=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(raw));
+   if(!proof||typeof proof.sessionId!=='string'||proof.sessionId.length<24||
+      !Number.isSafeInteger(proof.generation))throw Error('Invalid account generation');
+   const claims={authenticatedPeerId:authenticatedPeer,
+    sessionId:proof.sessionId,generation:proof.generation};
+   if(!sessions.isActive(claims))throw Error('No active authorization');
    const temporary=await issuer(authenticatedPeer);
-   // The earlier approval may have been superseded while waiting for the
-   // external TURN provider. Never disclose newly issued credentials then.
-   if(!sessions.isActive({authenticatedPeerId:authenticatedPeer,
-       sessionId:active.sessionId,generation:active.generation}))
-    throw Error('Authorization revoked during issuance');
+   // Recheck after external provider calls; a takeover may happen mid-await.
+   if(!sessions.isActive(claims))throw Error('Authorization revoked during issuance');
    const encoded=new TextEncoder().encode(JSON.stringify(temporary));
    if(encoded.length>16000)throw Error('TURN provider returned oversized response');
-   const framed=lpStream(stream);
    await framed.write(encoded,{signal:AbortSignal.timeout(8000)});
    await stream.close();
   }catch{

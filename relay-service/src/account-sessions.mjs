@@ -62,7 +62,8 @@ export class AccountSessions {
   if(!current||current.revoked||current.peerId!==authenticatedPeerId||
      current.sessionId!==sessionId||current.generation!==generation)return false;
   if(this.clock()>=current.expires){
-   this.revoke(current,'lease_expired');this.active.delete(role);return false;
+   // Drop the expired generation BEFORE notifying connection teardown.
+   this.active.delete(role);this.revoke(current,'lease_expired');return false;
   }
   return true;
  }
