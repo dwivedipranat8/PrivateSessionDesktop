@@ -22,7 +22,8 @@ async function updateGate(){
  try{
   const state=await api.accountStatus();
   e('initial-setup').hidden=!!state.registered;
-  e('account-form').hidden=!state.registered;
+  e('account-form').hidden=false;
+  e('unlock').hidden=!state.registered;
  }catch{e('account-error').textContent='Account service unavailable';}
 }
 async function unlock(){

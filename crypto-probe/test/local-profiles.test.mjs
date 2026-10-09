@@ -43,3 +43,15 @@ test('tampered account role or ciphertext refuses unlock',{timeout:90000},async(
   await assert.rejects(unlockLocalProfile({targets:[target],passphrase:PASS_2}));
  }finally{await rm(dir,{recursive:true,force:true});}
 });
+
+test('invalid initial password cannot leave a zero-length or partial vault file',{timeout:45000},async()=>{
+ const dir=await mkdtemp(path.join(os.tmpdir(),'ps-profile-invalid-'));
+ const target=path.join(dir,'PrivateSession.identity.enc.json');
+ try{
+  await assert.rejects(createLocalProfile({target,role:'protected',passphrase:'too short'}));
+  await assert.rejects(readFile(target,'utf8'),{code:'ENOENT'});
+  await createLocalProfile({target,role:'protected',passphrase:PASS_2});
+  const open=await unlockLocalProfile({targets:[target],passphrase:PASS_2});
+  assert.equal(open.role,'protected');clearUnlockedProfile(open);
+ }finally{await rm(dir,{recursive:true,force:true});}
+});

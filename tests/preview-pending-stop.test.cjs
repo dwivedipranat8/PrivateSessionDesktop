@@ -27,3 +27,17 @@ test('protected local preview requires selected USB folder and never claims encr
  const html=fs.readFileSync(path.join(__dirname,'../ui/index.html'),'utf8');
  assert.match(html,/does not prove a genuine encrypted USB device/);
 });
+
+test('first-use password field stays visible and normal role dropdown is absent',()=>{
+ const renderer=fs.readFileSync(path.join(__dirname,'../ui/renderer.js'),'utf8');
+ const html=fs.readFileSync(path.join(__dirname,'../ui/index.html'),'utf8');
+ assert.match(renderer,/e\('account-form'\)\.hidden=false/);
+ assert.match(renderer,/e\('unlock'\)\.hidden=!state\.registered/);
+ assert.equal(html.includes('id="role"'),false);
+ assert.match(html,/id="passphrase"/);
+});
+test('protected own live video preview cannot render in UI',()=>{
+ const html=fs.readFileSync(path.join(__dirname,'../ui/index.html'),'utf8');
+ assert.equal(html.includes('<video'),false);
+ assert.match(html,/id="media-indicator"/);
+});

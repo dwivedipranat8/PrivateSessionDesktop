@@ -23,24 +23,20 @@ export async function createLocalProfile({target,role,passphrase}={}){
  if(!allowed.has(role))throw Error('Invalid account role');
  const directory=path.dirname(target),info=await stat(directory);
  if(!info.isDirectory())throw Error('Profile directory unavailable');
- let handle;
- // "wx" guarantees one-time create only and rejects symlink replacement.
- try{handle=await open(target,'wx',0o600);}
- catch{throw Error('Cannot create profile: destination exists or is unavailable');}
- let identity;
+ let handle,identity;
  try{
+  // Validate password and serialize BEFORE creating the target. An invalid
+  // password must never strand an empty file that blocks first-run setup.
   identity=await newIdentity();
   const serialized=await lockIdentity(identity.privateKeyBytes,passphrase,{accountRole:role});
+  try{handle=await open(target,'wx',0o600);}
+  catch{throw Error('Cannot create profile: destination exists or is unavailable');}
   await handle.writeFile(serialized,{encoding:'utf8'});
   await handle.sync();
   return {fingerprint:identity.fingerprint};
- }catch(error){
-  // An empty/partial file must NOT be usable as a new authorized identity.
-  // Do not auto overwrite a damaged profile without manual recovery review.
-  throw error;
  }finally{
   identity?.privateKeyBytes.fill(0);
-  await handle.close();
+  if(handle)await handle.close();
  }
 }
 export async function unlockLocalProfile({targets,passphrase}={}){
