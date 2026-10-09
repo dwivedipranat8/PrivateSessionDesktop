@@ -17,10 +17,14 @@ class AccountClientLease {
  begin(lease){
   if(!this.closed||typeof lease?.sessionId!=='string'||lease.sessionId.length<24||
     lease.role!==this.role||!Number.isSafeInteger(lease.generation)||lease.generation<1||
-    !Number.isInteger(lease.expiresInMs)||lease.expiresInMs>3000||lease.expiresInMs<1000)
+    !Number.isInteger(lease.expiresInMs)||lease.expiresInMs>3000||lease.expiresInMs<1000||
+    !Number.isFinite(lease.requestedAt)||lease.requestedAt<0||
+    !Number.isFinite(this.clock())||this.clock()>=lease.requestedAt+lease.expiresInMs)
     throw Error('Signed-in account lease is invalid');
   this.sessionId=lease.sessionId;this.generation=lease.generation;
-  this.deadline=this.clock()+lease.expiresInMs;this.closed=false;this.busyKey=null;
+  // Anchor initial authorization to request emission (not response arrival).
+  // A delayed login packet must not mint additional authorization time.
+  this.deadline=lease.requestedAt+lease.expiresInMs;this.closed=false;this.busyKey=null;
   return true;
  }
  fail(reason='Account lease invalidated'){

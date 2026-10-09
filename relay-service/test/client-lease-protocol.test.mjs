@@ -22,6 +22,7 @@ test('true pinned encrypted relay server grants one active device per account',{
   const second=makePinnedLeaseRequest({node:otherHost,...config});
   const a=await first({operation:'begin'});
   assert.equal(a.ok,true);assert.equal(a.role,'host');
+  assert.equal(Number.isFinite(a.requestedAt),true);
   const b=await second({operation:'begin'});
   assert.equal(b.ok,true);
   assert.notEqual(b.sessionId,a.sessionId);

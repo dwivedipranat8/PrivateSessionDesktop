@@ -22,6 +22,7 @@ export function makePinnedLeaseRequest({node,serverAddress,expectedServerPeerId,
     throw Error('Session generation required');
    frame.sessionId=payload.sessionId;frame.generation=payload.generation;
   }
+  const requestedAt=performance.now();
   const conn=await node.dial(serverAddress,{signal:AbortSignal.timeout(timeoutMs)});
   if(conn.remotePeer.toString()!==expectedServerPeerId){
    await conn.close();throw Error('Wrong authenticated server');
@@ -39,6 +40,8 @@ export function makePinnedLeaseRequest({node,serverAddress,expectedServerPeerId,
     (typeof reply.sessionId!=='string'||reply.sessionId.length<24||
      !['host','protected'].includes(reply.role)||!Number.isSafeInteger(reply.generation)))
     throw Error('Invalid signed-in account');
+   // Local-only monotonic timestamp. Never let the server/UI supply it.
+   if(payload.operation==='begin')reply.requestedAt=requestedAt;
    return reply;
   }finally{
    try{await stream?.close();}catch{}
