@@ -44,3 +44,28 @@ test('cannot start with wrong-account or expired lease',()=>{
  assert.throws(()=>r.lease.begin({role:'protected',sessionId,generation:1,expiresInMs:3000}));
  assert.throws(()=>r.lease.begin({role:'host',sessionId,generation:1,expiresInMs:999999}));
 });
+
+test('delayed success cannot extend lease by network delivery delay',async()=>{
+ let at=0;let release;
+ const lease=new AccountClientLease({role:'host',clock:()=>at,
+   sendRenew:()=>new Promise(resolve=>{release=resolve;}),onStop:()=>{}});
+ lease.begin({role:'host',sessionId,generation:1,expiresInMs:3000});
+ at=500;const p=lease.tick();
+ at=2900;release({ok:true,role:'host',generation:1,expiresInMs:3000});
+ assert.equal(await p,true);
+ at=3500;assert.equal(lease.healthy,false);
+});
+test('old asynchronous renewal rejection cannot kill the next login generation',async()=>{
+ let rejectOld;let stops=0;
+ const lease=new AccountClientLease({role:'host',clock:()=>100,
+  sendRenew:()=>new Promise((_resolve,reject)=>{rejectOld=reject;}),
+  onStop:()=>{stops++;}});
+ lease.begin({role:'host',sessionId,generation:1,expiresInMs:3000});
+ const pending=lease.tick();
+ lease.fail('old device removed');
+ lease.begin({role:'host',sessionId:'fresh_second_lease_0987654321',generation:2,expiresInMs:3000});
+ rejectOld(Error('late rejection'));
+ assert.equal(await pending,false);
+ assert.equal(lease.healthy,true);
+ assert.equal(stops,1);
+});

@@ -34,3 +34,27 @@ test('manual failure expires immediately',()=>{
  const r=rig();r.lease.invalidate();r.lease.invalidate();
  assert.deepEqual(r.counts(),[1,1]);assert.equal(r.lease.challenge(),null);
 });
+
+test('delayed event loop cannot rescue expired 3s proof with a newer response',()=>{
+ const r=rig(),initial=r.lease.challenge();
+ r.lease.accept({kind:'response',sessionId:SID,token:initial.token},{authenticated:true});
+ r.wait(2500);
+ const second=r.lease.challenge();
+ r.wait(600); // 3.1s elapsed; no timer tick has fired
+ assert.equal(r.lease.accept({kind:'response',sessionId:SID,token:second.token},{authenticated:true}),false);
+ assert.equal(r.lease.active,false);
+ assert.deepEqual(r.counts(),[1,0]);
+});
+test('first-proof deadline enforced without separate timer tick',()=>{
+ const r=rig();const c=r.lease.challenge();
+ r.wait(5000);
+ assert.equal(r.lease.accept({kind:'response',sessionId:SID,token:c.token},{authenticated:true}),false);
+ assert.equal(r.lease.challenge(),null);
+});
+test('active getter expires proof even if timer delayed past 5s',()=>{
+ const r=rig(),c=r.lease.challenge();
+ r.lease.accept({kind:'response',sessionId:SID,token:c.token},{authenticated:true});
+ r.wait(5001);
+ assert.equal(r.lease.active,false);
+ assert.deepEqual(r.counts(),[1,1]);
+});

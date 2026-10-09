@@ -65,12 +65,19 @@ class SecureSessionCoordinator{
   return this.phase;
  }
  async fromPinnedNoise(frame,{authenticatedRemotePeerId}={}){
+  // An incoming frame cannot revive an expired session after timer starvation.
+  this.lease.tick();
   if(this.phase==='expired'||this.phase==='protected'||authenticatedRemotePeerId!==this.remotePeerId)return false;
   if(!this.healthyGuards()){this.fail('Local guard failed');return false;}
   if(!frame||frame.sessionId!==this.sessionId)return false;
   if(frame.kind==='challenge'&&typeof frame.token==='string'&&frame.token.length>=20){
    try{
-    await this.sendNoise({kind:'response',sessionId:this.sessionId,token:frame.token});
+    const result=await this.sendNoise({kind:'response',sessionId:this.sessionId,token:frame.token});
+    this.lease.tick();
+    if(result===false||this.phase==='expired'||this.phase==='protected'){
+      if(result===false)this.fail('Authenticated reply not sent');
+      return false;
+    }
     return true;
    }catch{this.fail('Cannot respond to authenticated peer');return false;}
   }

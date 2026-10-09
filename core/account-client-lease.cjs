@@ -12,7 +12,7 @@ class AccountClientLease {
    typeof sendRenew!=='function'||typeof onStop!=='function')
     throw Error('Pinned role, monotonic clock and fail-closed callbacks required');
   this.role=role;this.clock=clock;this.sendRenew=sendRenew;this.onStop=onStop;
-  this.deadline=null;this.sessionId=null;this.generation=null;this.closed=true;this.busy=false;
+  this.deadline=null;this.sessionId=null;this.generation=null;this.closed=true;this.busyKey=null;this.operationSequence=0;
  }
  begin(lease){
   if(!this.closed||typeof lease?.sessionId!=='string'||lease.sessionId.length<24||
@@ -20,12 +20,12 @@ class AccountClientLease {
     !Number.isInteger(lease.expiresInMs)||lease.expiresInMs>3000||lease.expiresInMs<1000)
     throw Error('Signed-in account lease is invalid');
   this.sessionId=lease.sessionId;this.generation=lease.generation;
-  this.deadline=this.clock()+lease.expiresInMs;this.closed=false;
+  this.deadline=this.clock()+lease.expiresInMs;this.closed=false;this.busyKey=null;
   return true;
  }
  fail(reason='Account lease invalidated'){
   if(this.closed)return false;
-  this.closed=true;this.deadline=null;this.sessionId=null;this.generation=null;
+  this.closed=true;this.deadline=null;this.sessionId=null;this.generation=null;this.busyKey=null;
   // Synchronous callback must FIRST conceal content, clear drafts and stop AV.
   this.onStop(reason);
   return true;
@@ -36,23 +36,32 @@ class AccountClientLease {
  async tick(){
   if(this.closed)return false;
   if(!this.healthy){this.fail('Account lease expired');return false;}
-  if(this.busy)return this.healthy;
-  this.busy=true;
-  const sessionId=this.sessionId,generation=this.generation;
+  if(this.busyKey!==null)return this.healthy;
+  const operationKey=++this.operationSequence;
+  this.busyKey=operationKey;
+  const sessionId=this.sessionId,generation=this.generation,requestedAt=this.clock();
+  const belongsToCurrent=()=>!this.closed&&this.busyKey===operationKey&&
+    this.sessionId===sessionId&&this.generation===generation;
   try{
    const response=await this.sendRenew({operation:'renew',sessionId,generation});
-   // A late network callback MUST NOT recreate a terminated or replaced lease.
-   if(this.closed||this.sessionId!==sessionId||this.generation!==generation)return false;
-   if(!this.healthy){this.fail('Account renewal was late');return false;}
+   // Bound both latency and authority to the original request time. Never
+   // extend a lease simply because a packet was delivered late.
+   if(!belongsToCurrent())return false;
+   if(!this.healthy){this.fail('Account renewal arrived after deadline');return false;}
    if(response?.ok!==true||response.role!==this.role||response.generation!==generation||
      !Number.isInteger(response.expiresInMs)||response.expiresInMs<1000||response.expiresInMs>3000){
     this.fail('Account device was revoked');return false;
    }
-   this.deadline=this.clock()+response.expiresInMs;
+   const deadline=requestedAt+response.expiresInMs;
+   if(this.clock()>=deadline){this.fail('Account renewal response stale');return false;}
+   this.deadline=deadline;
    return true;
   }catch{
-   this.fail('Server authorization unavailable');return false;
-  }finally{this.busy=false;}
+   if(belongsToCurrent())this.fail('Server authorization unavailable');
+   return false;
+  }finally{
+   if(this.busyKey===operationKey)this.busyKey=null;
+  }
  }
 }
 module.exports={AccountClientLease};
