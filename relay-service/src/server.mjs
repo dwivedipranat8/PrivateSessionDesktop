@@ -8,15 +8,17 @@ import {privateKeyFromProtobuf} from '@libp2p/crypto/keys';
 import {lpStream} from '@libp2p/utils';
 import {parseEnrolled,admit,permittedPair} from './policy.mjs';
 import {makeTurnIssuer} from './turn.mjs';
+import {AccountSessions} from './account-sessions.mjs';
 
 const TURN_PROTOCOL='/private-session/temporary-turn/1.0.0';
+const LEASE_PROTOCOL='/private-session/account-lease/1.0.0';
 
 /*
  * A restricted libp2p relay and authenticated TURN-credential endpoint.
  * It does not own or decrypt endpoint-to-endpoint chat and video keys.
  * Environment must contain the static server identity and device allowlist.
  */
-export async function createPrivateRelay({privateKey,enrolled,issuer,port=0,host='127.0.0.1',announceHost=null}){
+export async function createPrivateRelay({privateKey,enrolled,issuer,port=0,host='127.0.0.1',announceHost=null,accounts=null}){
  if(!privateKey||!(enrolled instanceof Map)||enrolled.size<1||typeof issuer!=='function')
   throw Error('Static identity, enrollment and credential issuer required');
  if(!Number.isInteger(port)||port<0||port>65535)throw Error('Invalid listener port');
@@ -25,6 +27,7 @@ export async function createPrivateRelay({privateKey,enrolled,issuer,port=0,host
   if(!/^[a-z0-9][a-z0-9.-]{0,200}$/i.test(announceHost))throw Error('Invalid announce host');
   addresses.announce=['/dns4/'+announceHost+'/tcp/443/tls/ws'];
  }
+ const sessions=accounts||new AccountSessions({enrolled});
  const node=await createLibp2p({
   privateKey,addresses,transports:[webSockets()],
   connectionEncrypters:[noise()],streamMuxers:[yamux()],
@@ -40,6 +43,31 @@ export async function createPrivateRelay({privateKey,enrolled,issuer,port=0,host
     applyDefaultLimit:true,defaultDurationLimit:65*60*1000,
     defaultDataLimit:BigInt(128*1024*1024)
    }})
+  }
+ });
+ // Authenticated Noise identity, not a password supplied in a JSON field,
+ // determines account role. A new approved device replaces the old lease.
+ await node.handle(LEASE_PROTOCOL,async(stream,connection)=>{
+  const authenticatedPeerId=connection.remotePeer.toString();
+  if(!admit(enrolled,authenticatedPeerId)){stream.abort(Error('Not enrolled'));return;}
+  try{
+   const framed=lpStream(stream);
+   const incoming=await framed.read({signal:AbortSignal.timeout(8000)});
+   const bytes=incoming.subarray();
+   if(bytes.length>1024)throw Error('Request too large');
+   const payload=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));
+   if(!payload||!['begin','renew','end'].includes(payload.operation))throw Error('Invalid operation');
+   let response;
+   if(payload.operation==='begin'){
+    response={ok:true,...sessions.begin({authenticatedPeerId})};
+   }else{
+    const frame={authenticatedPeerId,sessionId:payload.sessionId,generation:payload.generation};
+    response=payload.operation==='renew'?sessions.renew(frame):{ok:sessions.end(frame)};
+   }
+   await framed.write(new TextEncoder().encode(JSON.stringify(response)),{signal:AbortSignal.timeout(8000)});
+   await stream.close();
+  }catch{
+   try{stream.abort(Error('Account lease rejected'));}catch{}
   }
  });
  await node.handle(TURN_PROTOCOL,async(stream,connection)=>{
