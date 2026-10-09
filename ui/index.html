@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'self'; media-src 'self' blob:; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Private Session Preview</title>
+<link rel="stylesheet" href="style.css">
+<script defer src="../core/message-policy.js"></script>
+<script defer src="renderer.js"></script></head>
+<body>
+<div class="layout">
+<aside>
+<h2>◈ Private Session</h2>
+<p class="soft">Preview 0.2</p>
+<div class="warning">LOCAL DEMO — not an encrypted messenger</div>
+<label for="role">Demo view</label>
+<select id="role"><option value="host">Host</option><option value="guest">Guest</option></select>
+<p class="soft tiny">Roles are simulated here.</p>
+</aside>
+<main>
+<header><div><h1>Private conversation</h1><p>Camera and microphone required</p></div><span id="status">Inactive</span></header>
+<div class="grid">
+<section class="panel grow">
+<div class="panel-top"><div><h3>Chat</h3><p class="soft">Seen + 2 seconds</p></div><button id="delete" class="subtle danger" hidden disabled>Delete chat</button></div>
+<div id="messages"><p class="empty">Press Start to begin.</p></div>
+<button id="message-btn" disabled>Add test message</button>
+</section>
+<div class="side">
+<section class="panel">
+<h3>Camera &amp; microphone</h3>
+<div class="camera"><video muted autoplay playsinline id="camera-view"></video><p id="no-camera">Camera OFF</p></div>
+<div class="mic-row"><span>Microphone</span><span id="mic-state">OFF</span></div>
+<div class="meter"><div id="mic-level"></div></div>
+<p class="soft tiny" id="sensor-status">Both required to start.</p>
+</section>
+<section class="panel">
+<h3>USB test</h3><p class="soft" id="usb-path">No folder selected</p>
+<div class="buttons"><button id="usb-btn">Choose folder</button><button id="usb-clear">Clear</button></div>
+</section>
+</div></div>
+<footer><div class="buttons">
+<button class="primary" id="start">Start</button>
+<button class="danger" id="end" disabled>End</button>
+<button id="fail" disabled>Test failure</button>
+</div><span id="notice">Ready</span></footer>
+</main></div></body></html>
