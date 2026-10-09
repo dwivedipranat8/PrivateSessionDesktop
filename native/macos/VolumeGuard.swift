@@ -61,6 +61,12 @@ func diskChanged(_ disk: DADisk, _ context: UnsafeMutableRawPointer?) {
     guardObject.check()
 }
 
+func diskDescriptionChanged(_ disk: DADisk, _ changedKeys: CFArray, _ context: UnsafeMutableRawPointer?) {
+    guard let context else { return }
+    let guardObject = Unmanaged<VolumeGuard>.fromOpaque(context).takeUnretainedValue()
+    guardObject.check()
+}
+
 func main() {
     let args = CommandLine.arguments
     guard args.count == 3, let pid = Int32(args[1]),
@@ -77,8 +83,8 @@ func main() {
     // unmounts and inaccessible volumes not reflected by a particular callback.
     let context = Unmanaged.passUnretained(guardObject).toOpaque()
     DARegisterDiskDisappearedCallback(daSession, nil, diskChanged, context)
-    DARegisterDiskDescriptionChangedCallback(daSession, nil, nil, diskChanged, context)
-    DASessionScheduleWithRunLoop(daSession, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode)
+    DARegisterDiskDescriptionChangedCallback(daSession, nil, nil, diskDescriptionChanged, context)
+    DASessionScheduleWithRunLoop(daSession, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode!)
 
     let periodic = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { _ in
         guardObject.check()
