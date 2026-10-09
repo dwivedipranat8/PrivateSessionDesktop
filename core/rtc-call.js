@@ -31,7 +31,7 @@
    this.onRemoteMedia=onRemoteMedia||(()=>{});this.onStop=onStop||(()=>{});
    this.RTC=rtcCtor||root.RTCPeerConnection;
    this.certificateFactory=certificateFactory||this.RTC?.generateCertificate?.bind(this.RTC);
-   this.pc=null;this.localStream=null;this.lastReceivedSeq=0;this.nextSeq=1;
+   this.pc=null;this.localStream=null;this.pendingCandidates=[];this.lastReceivedSeq=0;this.nextSeq=1;
    this.closed=false;this.ready=false;
   }
   async prepare({localStream,iceServers,initiator=false}={}){
@@ -52,6 +52,8 @@
    this.localStream=localStream;
    for(const track of localStream.getTracks())this.pc.addTrack(track,localStream);
    this.pc.ontrack=e=>{if(!this.closed)this.onRemoteMedia(e.streams,e.track);};
+   // Never accept an unreviewed RTC text channel, on either end of a call.
+   this.pc.ondatachannel=e=>{try{e.channel?.close();}catch{}};
    this.pc.onicecandidate=e=>{
     if(!this.closed&&e.candidate){
       this.sendFrame({kind:'candidate',candidate:e.candidate.toJSON?.()||e.candidate}).catch(()=>this.end('Signalling failed'));
@@ -71,12 +73,14 @@
        this.end('Media negotiation setup failed'); // also stops camera/mic
        throw err;
      }
-   }else{
-     // Chat/control MUST stay on the authenticated Noise channel, never on
-     // a separate WebRTC data channel without the same session authorization.
-     this.pc.ondatachannel=e=>e.channel.close();
    }
    return true;
+  }
+  async flushCandidates(){
+   if(!this.pc?.remoteDescription)return;
+   const awaiting=this.pendingCandidates;
+   this.pendingCandidates=[];
+   for(const candidate of awaiting)await this.pc.addIceCandidate(candidate);
   }
   async sendFrame(payload){
    if(this.closed)throw Error('Session closed');
@@ -92,17 +96,23 @@
      if(envelope.kind==='offer'){
        if(this.pc.signalingState!=='stable'||!isOffer({type:'offer',sdp:envelope.sdp},'offer'))return false;
        await this.pc.setRemoteDescription({type:'offer',sdp:envelope.sdp});
+       await this.flushCandidates();
        const answer=await this.pc.createAnswer();
        await this.pc.setLocalDescription(answer);
        await this.sendFrame({kind:'answer',sdp:answer.sdp});
      }else if(envelope.kind==='answer'){
        if(this.pc.signalingState!=='have-local-offer'||!isOffer({type:'answer',sdp:envelope.sdp},'answer'))return false;
        await this.pc.setRemoteDescription({type:'answer',sdp:envelope.sdp});
+       await this.flushCandidates();
      }else if(envelope.kind==='candidate'){
        const c=envelope.candidate;
-       if(!c||typeof c.candidate!=='string'||c.candidate.length>MAX_ICE||
-         !this.pc.remoteDescription)return false;
-       await this.pc.addIceCandidate(c);
+       if(!c||typeof c.candidate!=='string'||c.candidate.length>MAX_ICE)return false;
+       if(!this.pc.remoteDescription){
+         if(this.pendingCandidates.length>=32){this.end('Too many early candidates');return false;}
+         this.pendingCandidates.push(c);
+       }else{
+         await this.pc.addIceCandidate(c);
+       }
      }else if(envelope.kind==='end'){
        this.end('Peer ended');
      }
@@ -116,7 +126,7 @@
    // Caller is responsible for the shared capture stream; close it on every end.
    try{this.localStream?.getTracks().forEach(t=>t.stop());}catch{}
    this.onRemoteMedia([],null);this.onStop(reason);
-   this.pc=null;this.localStream=null;
+   this.pc=null;this.localStream=null;this.pendingCandidates=[];
   }
  }
  if(typeof module!=='undefined'&&module.exports)module.exports={RTCCall};

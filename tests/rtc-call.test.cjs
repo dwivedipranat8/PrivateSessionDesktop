@@ -16,7 +16,7 @@ function fake(){
    async createAnswer(){return {type:'answer',sdp:'v=0\n'+'a=fingerprint:sha-256 11:22:33\n'+'x'.repeat(40)};}
    async setLocalDescription(o){this.signalingState=o.type==='offer'?'have-local-offer':'stable';}
    async setRemoteDescription(o){this.remoteDescription=o;this.signalingState=o.type==='offer'?'have-remote-offer':'stable';}
-   async addIceCandidate(){}
+   async addIceCandidate(c){this.candidates??=[];this.candidates.push(c);}
    close(){this.connectionState='closed';}
  }
  return {RTC,made};
@@ -65,4 +65,26 @@ test('out-of-order authenticated session frames do not advance sequence',async()
  const frame={kind:'end',sessionId:SESSION,senderDevice:PEER,seq:4};
  assert.equal(await c.acceptSignal(frame,{fromAuthenticatedPinnedNoisePeer:true}),false);
  assert.equal(await c.acceptSignal({...frame,seq:1},{fromAuthenticatedPinnedNoisePeer:true}),true);
+});
+
+test('early ICE candidates are bounded and flushed when pinned offer arrives',async()=>{
+ const f=fake(),c=new RTCCall({sessionId:SESSION,localDeviceId:LOCAL,peerDeviceId:PEER,
+  sendAuthenticated:async()=>{},rtcCtor:f.RTC});
+ await c.prepare({localStream:media(),iceServers:[{urls:'turns:relay.example.org:5349',username:'temp',credential:'temp'}]});
+ const early={kind:'candidate',sessionId:SESSION,senderDevice:PEER,seq:1,candidate:{candidate:'candidate:mock'}};
+ assert.equal(await c.acceptSignal(early,{fromAuthenticatedPinnedNoisePeer:true}),true);
+ assert.equal(c.pendingCandidates.length,1);
+ const offer={kind:'offer',sessionId:SESSION,senderDevice:PEER,seq:2,
+  sdp:'v=0\na=fingerprint:sha-256 11:22:33\n'+'x'.repeat(30)};
+ assert.equal(await c.acceptSignal(offer,{fromAuthenticatedPinnedNoisePeer:true}),true);
+ assert.equal(c.pendingCandidates.length,0);
+ assert.equal(f.made[0].candidates?.length,1);
+ c.end();
+});
+test('incoming RTC data channels are forcibly closed, including on caller',async()=>{
+ const f=fake(),c=new RTCCall({sessionId:SESSION,localDeviceId:LOCAL,peerDeviceId:PEER,
+  sendAuthenticated:async()=>{},rtcCtor:f.RTC});
+ await c.prepare({localStream:media(),iceServers:[{urls:'turn:relay.example.org',username:'temp',credential:'temp'}],initiator:true});
+ let closed=false;f.made[0].ondatachannel({channel:{close(){closed=true;}}});
+ assert.equal(closed,true);c.end();
 });
