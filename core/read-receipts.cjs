@@ -1,11 +1,11 @@
 'use strict';
 class ReadReceipts{
- constructor({sessionId,clock=()=>performance.now()}){
-  if(!sessionId||sessionId.length<12)throw Error('Session identifier required');
-  this.sessionId=sessionId;this.clock=clock;this.messages=new Map();
+ constructor({sessionId,clock=()=>performance.now(),maxMessages=256}){
+  if(!sessionId||sessionId.length<12||!Number.isSafeInteger(maxMessages)||maxMessages<1||maxMessages>1024)throw Error('Session identifier and bounded capacity required');
+  this.sessionId=sessionId;this.clock=clock;this.maxMessages=maxMessages;this.messages=new Map();
  }
  send(id,receiverDevice){
-  if(!id||id.length<12||!receiverDevice||this.messages.has(id))return false;
+  if(!id||id.length<12||!receiverDevice||this.messages.has(id)||this.messages.size>=this.maxMessages)return false;
   this.messages.set(id,{receiverDevice,created:this.clock(),seen:null});return true;
  }
  seen({sessionId,id,deviceId},{authenticated=false}={}){

@@ -26,6 +26,7 @@ export async function createDesktopChat({
  const identity=privateKeyFromProtobuf(privateKeyBytes);
  let ended=false,connected=false,peerLease=null,router=null,control=null;
  let interval=null,renewing=false,lastRenew=clock(),lastChallenge=0;
+ const MAX_PENDING=256;
  const incoming=new Map();
  const receipts=new ReadReceipts({sessionId,clock});
  const event=e=>{if(ended&&e.type!=='closed')return;try{onEvent(e);}catch{}};
@@ -36,7 +37,7 @@ export async function createDesktopChat({
   event({type:'cleared'});
   ended=true;
   if(interval)clearInterval(interval);
-  incoming.clear();receipts.clear();
+  incoming.clear();receipts.clear();lastReceipt.clear();
   event({type:'closed',reason:'Security/session connection terminated'});
   Promise.resolve(client?.end()).catch(()=>{});
  }
@@ -61,7 +62,7 @@ export async function createDesktopChat({
  function handleReceivedText(id,text){
   if(ended||!guard())return false;
   if(typeof id!=='string'||id.length<12||typeof text!=='string')return false;
-  if(incoming.has(id))return false;
+  if(incoming.has(id)||incoming.size>=MAX_PENDING)return false;
   incoming.set(id,{created:clock(),seen:null});
   event({type:'incoming',id,text});
   return true;
@@ -155,7 +156,7 @@ export async function createDesktopChat({
   async sendText(text){
    if(!guard()||typeof text!=='string'||text.length<1||text.length>2048)throw Error('Encrypted chat not authorized');
    const id=randomBytes(18).toString('base64url');
-   receipts.send(id,approvedPeerId);
+   if(!receipts.send(id,approvedPeerId))throw Error('Too many pending messages');
    if(!await send('control',{kind:'text',messageId:id,text})){
     receipts.clear();fail('Encrypted send failed');throw Error('Encrypted transport failed');
    }

@@ -39,3 +39,19 @@ test('Clear erases pending message state',()=>{
  const r=rig();r.receipt.send('message-123456','approved-device');r.receipt.clear();
  assert.deepEqual(r.receipt.expire(),[]);assert.equal(r.receipt.expiresAt('message-123456'),null);
 });
+
+test('untrusted send flood is bounded without discarding existing protected messages',()=>{
+ let now=0;
+ const r=new ReadReceipts({sessionId,clock:()=>now,maxMessages:2});
+ assert.equal(r.send('message-000001','approved-device'),true);
+ assert.equal(r.send('message-000002','approved-device'),true);
+ assert.equal(r.send('message-000003','approved-device'),false);
+ assert.equal(r.expiresAt('message-000001'),120000);
+ now=120000;
+ assert.deepEqual(r.expire(),['message-000001','message-000002']);
+ assert.equal(r.send('message-000003','approved-device'),true);
+});
+test('read-receipt maximum cannot be disabled or made unbounded',()=>{
+ for(const maxMessages of [0,-1,Infinity,100000,NaN])
+  assert.throws(()=>new ReadReceipts({sessionId,maxMessages}));
+});
