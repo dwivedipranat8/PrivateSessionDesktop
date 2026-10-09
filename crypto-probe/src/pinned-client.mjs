@@ -53,19 +53,19 @@ export async function createPinnedClient({privateKey,sessionId,onFrame,onSession
   });
   return true;
  }
- await node.handle(PROTOCOL,(s,conn)=>{accept(s,conn);});
+ await node.handle(PROTOCOL,(s,conn)=>{accept(s,conn);},{runOnLimitedConnection:true});
  return Object.freeze({
   get peerId(){return node.peerId.toString();},
   get approvedPeerId(){return approvedPeer;},
   get joinedRelayId(){return joinedRelayId;},
-  get relayedAddresses(){return node.getMultiaddrs().map(a=>a.toString()).filter(x=>x.includes('/p2p-circuit/'));},
+  get relayedAddresses(){return node.getMultiaddrs().filter(a=>a.toString().includes('/p2p-circuit/'));},
   approvePeer(peerId){
    if(ended||stream||approvedPeer||!goodId(peerId)||peerId===node.peerId.toString())
     throw Error('Explicit in-person peer approval required before connection');
    approvedPeer=peerId;
   },
   async joinRelay(address,relayId){
-   if(ended||!approvedPeer||!goodId(relayId)||typeof address!=='string')
+   if(ended||!approvedPeer||!goodId(relayId)||typeof address?.getComponents!=='function')
     throw Error('Pinned relay identity and approved peer required');
    const conn=await node.dial(address,{signal:AbortSignal.timeout(10000)});
    if(conn.remotePeer.toString()!==relayId){
@@ -75,12 +75,12 @@ export async function createPinnedClient({privateKey,sessionId,onFrame,onSession
    return true;
   },
   async connect(remoteCircuitAddress){
-   if(ended||!relayVerified||!approvedPeer||stream||typeof remoteCircuitAddress!=='string'||
-      !remoteCircuitAddress.includes('/p2p-circuit/p2p/'+approvedPeer))
+   if(ended||!relayVerified||!approvedPeer||stream||typeof remoteCircuitAddress?.getComponents!=='function'||
+      !remoteCircuitAddress.toString().includes('/p2p-circuit/p2p/'+approvedPeer))
     throw Error('No approved relayed destination');
    const conn=await node.dial(remoteCircuitAddress,{signal:AbortSignal.timeout(10000)});
    if(conn.remotePeer.toString()!==approvedPeer)throw Error('Wrong authenticated remote identity');
-   const outbound=await node.dialProtocol(conn.remotePeer,PROTOCOL,{signal:AbortSignal.timeout(10000)});
+   const outbound=await conn.newStream(PROTOCOL,{signal:AbortSignal.timeout(10000),runOnLimitedConnection:true});
    if(!accept(outbound,conn))throw Error('Peer stream refused');
    return true;
   },

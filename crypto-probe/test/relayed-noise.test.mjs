@@ -37,7 +37,7 @@ test('two separately authenticated peers communicate through third-party relay',
     const value=new TextDecoder().decode(event.data.subarray());
     if(value==='DUMMY-RELAY-HELLO')stream.send(new TextEncoder().encode('DUMMY-RELAY-ACK'));
    });
-  });
+  },{runOnLimitedConnection:true});
   await sender.dial(relayAddress,{signal:AbortSignal.timeout(8000)});
   await receiver.dial(relayAddress,{signal:AbortSignal.timeout(8000)});
   // The receiver needs an active circuit reservation on the relay.
@@ -50,7 +50,7 @@ test('two separately authenticated peers communicate through third-party relay',
   assert.ok(reserved,'No relayed multiaddress became available');
   const connection=await sender.dial(reserved,{signal:AbortSignal.timeout(10000)});
   assert.equal(connection.remotePeer.toString(),receiver.peerId.toString());
-  const stream=await sender.dialProtocol(receiver.peerId,PROTO,{signal:AbortSignal.timeout(10000)});
+  const stream=await connection.newStream(PROTO,{signal:AbortSignal.timeout(10000),runOnLimitedConnection:true});
   stream.addEventListener('message',event=>completed(new TextDecoder().decode(event.data.subarray())));
   stream.send(new TextEncoder().encode('DUMMY-RELAY-HELLO'));
   assert.equal(await Promise.race([ack,timeout(10000)]),'DUMMY-RELAY-ACK');

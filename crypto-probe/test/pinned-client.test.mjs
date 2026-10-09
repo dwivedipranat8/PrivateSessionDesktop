@@ -24,11 +24,11 @@ test('two pinned, encrypted relay clients can exchange only session-bound dummy 
  assert.ok(relayAddr);
  try{
   a.approvePeer(b.peerId);b.approvePeer(a.peerId);
-  await a.joinRelay(relayAddr.toString(),relay.peerId.toString());
-  await b.joinRelay(relayAddr.toString(),relay.peerId.toString());
+  await a.joinRelay(relayAddr,relay.peerId.toString());
+  await b.joinRelay(relayAddr,relay.peerId.toString());
   let bAddr=null;
   for(let i=0;i<100;i++){
-   bAddr=b.relayedAddresses.find(x=>x.includes('/p2p-circuit/p2p/'));
+   bAddr=b.relayedAddresses.find(x=>x.toString().includes('/p2p-circuit/p2p/'));
    if(bAddr)break;
    await delay(100);
   }
