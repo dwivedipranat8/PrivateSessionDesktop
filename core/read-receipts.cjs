@@ -11,12 +11,12 @@ class ReadReceipts{
  seen({sessionId,id,deviceId},{authenticated=false}={}){
   const entry=this.messages.get(id);
   if(!authenticated||sessionId!==this.sessionId||!entry||entry.receiverDevice!==deviceId||entry.seen!==null||
-       this.clock()>=entry.created+30000)return false;
+       this.clock()>=entry.created+20000)return false;
   entry.seen=this.clock();return true;
  }
  expiresAt(id){
   const e=this.messages.get(id);if(!e)return null;
-  return Math.min(e.created+30000,e.seen===null?Infinity:e.seen+2000);
+  return Math.min(e.created+20000,e.seen===null?Infinity:e.seen+2000);
  }
  expire(){
   const out=[];

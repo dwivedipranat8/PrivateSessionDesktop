@@ -6,13 +6,16 @@
  * Nothing here is persistent. Host callbacks must hide before awaiting I/O.
  */
 const {PeerLease}=require('./peer-lease.cjs');
+const {evaluateRoleGuards,ROLE}=require('./role-requirements.cjs');
 class SecureSessionCoordinator{
  constructor({sessionId,remotePeerId,clock,random,guards,sendNoise,hide,
-   stopMedia,clearChat,destroyEphemeralKeys,closeTransport,closeWindow}){
+   stopMedia,clearChat,destroyEphemeralKeys,closeTransport,closeWindow,role=ROLE.PROTECTED}){
   if(typeof sessionId!=='string'||sessionId.length<12||typeof remotePeerId!=='string'||remotePeerId.length<12)
    throw Error('Verified identity and session required');
   for(const fn of [clock,guards,sendNoise,hide,stopMedia,clearChat,destroyEphemeralKeys,closeTransport,closeWindow])
    if(typeof fn!=='function')throw Error('Missing fail-closed callback');
+  if(!Object.values(ROLE).includes(role))throw Error('Explicit role required');
+  this.role=role;
   this.sessionId=sessionId;this.remotePeerId=remotePeerId;
   Object.assign(this,{clock,guards,sendNoise,hide,stopMedia,clearChat,destroyEphemeralKeys,closeTransport,closeWindow});
   this.phase='starting';this.lastChallengeAt=null;this.stopExecuted=false;this.opened=false;
@@ -24,8 +27,7 @@ class SecureSessionCoordinator{
  healthyGuards(){
   try{
    const status=this.guards();
-   return status&&status.network===true&&status.volume===true&&status.camera===true&&
-     status.microphone===true&&status.trust===true;
+   return evaluateRoleGuards(this.role,status).allowed;
   }catch{return false;}
  }
  protect(){
@@ -52,7 +54,7 @@ class SecureSessionCoordinator{
   this.lease.tick();
   if(this.lease.phase==='expired')return this.phase;
   const now=this.clock();
-  if(this.lastChallengeAt===null||now-this.lastChallengeAt>=1000){
+  if(this.lastChallengeAt===null||now-this.lastChallengeAt>=500){
    this.lastChallengeAt=now;
    const frame=this.lease.challenge();
    if(frame){
@@ -80,6 +82,12 @@ class SecureSessionCoordinator{
    return fresh;
   }
   return false;
+ }
+ // Native/OS-verified events should invoke this immediately, without
+ // waiting for any polling or heartbeat interval.
+ onDefinitiveLoss(kind){
+  if(!['usb','network','lock','sensor','tamper','capture','account-revoked'].includes(kind))throw Error('Unknown failure');
+  this.fail('Security condition lost: '+kind);
  }
  get canDisplay(){return this.phase==='active'&&!this.stopExecuted&&this.lease.active&&this.healthyGuards();}
 }

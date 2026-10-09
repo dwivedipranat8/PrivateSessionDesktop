@@ -9,9 +9,9 @@ test('two seconds from authenticated receiver receipt',()=>{
  r.wait(1999);assert.deepEqual(r.receipt.expire(),[]);r.wait(1);
  assert.deepEqual(r.receipt.expire(),['message-123456']);
 });
-test('unseen messages expire after 30 seconds',()=>{
+test('unseen messages expire after 20 seconds',()=>{
  const r=rig();r.receipt.send('message-123456','approved-device');
- r.wait(30000);assert.deepEqual(r.receipt.expire(),['message-123456']);
+ r.wait(20000);assert.deepEqual(r.receipt.expire(),['message-123456']);
 });
 test('not trusting wrong device, unauthenticated or duplicate receipt',()=>{
  const r=rig();r.receipt.send('message-123456','approved-device');
