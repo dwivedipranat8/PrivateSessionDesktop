@@ -1,44 +1,70 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8">
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'self'; media-src 'self' blob:; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
-<title>Private Session Preview</title>
+<title>Private Session — Development Preview</title>
 <link rel="stylesheet" href="style.css">
 <script defer src="../core/message-policy.js"></script>
-<script defer src="renderer.js"></script></head>
+<script defer src="renderer.js"></script>
+</head>
 <body>
-<div class="layout">
+<section id="account-gate" class="account-gate">
+ <div class="account-card">
+  <h1>Private Session</h1>
+  <p class="soft">Unlock your encrypted device profile</p>
+  <form id="account-form">
+   <label for="passphrase">Password</label>
+   <input id="passphrase" type="password" autocomplete="off" spellcheck="false" maxlength="512" minlength="16" placeholder="Enter your private password" required>
+   <button class="primary" id="unlock" type="submit">Unlock</button>
+  </form>
+  <section id="initial-setup" hidden>
+   <p class="soft">First-time setup only. Choose where this device's encrypted identity lives.</p>
+   <div class="buttons">
+    <button id="setup-local" type="button">Set up on this computer</button>
+    <button id="setup-portable" type="button">Set up on external drive</button>
+   </div>
+   <p class="soft tiny">The external-drive app must be launched from its encrypted drive. Neither password nor private key is uploaded to GitHub. Use a different password on the other person's device.</p>
+  </section>
+  <p id="account-error" class="account-error" role="status" aria-live="polite"></p>
+  <p class="warning">DEVELOPMENT PREVIEW — not yet a secure remote messenger. Do not enter real conversations.</p>
+ </div>
+</section>
+<div class="layout" id="app-shell" hidden>
 <aside>
-<h2>◈ Private Session</h2>
-<p class="soft">Preview 0.2</p>
-<div class="warning">LOCAL DEMO — not an encrypted messenger</div>
-<label for="role">Demo view</label>
-<select id="role"><option value="host">Host</option><option value="guest">Protected</option></select>
-<p class="soft tiny">Roles simulated. No real peer connection or password login.</p>
+ <h2>◈ Private Session</h2>
+ <p class="soft">Encrypted local identity unlocked</p>
+ <div class="warning">LOCAL DEMO — peer-to-peer encrypted messaging/video not connected</div>
+ <button id="lock" type="button">Lock account</button>
 </aside>
 <main>
-<header><div><h1>Private conversation</h1><p>Protected: camera and mic required · Host: optional</p></div><span id="status">Inactive</span></header>
+<header>
+ <div><h1>Conversation</h1><p id="media-indicator" aria-live="polite">Camera and microphone off</p></div>
+ <span id="status">Inactive</span>
+</header>
 <div class="grid">
-<section class="panel grow">
-<div class="panel-top"><div><h3>Chat</h3><p class="soft">Seen + 120 seconds</p></div><button id="delete" class="subtle danger" hidden disabled>Clear &amp; End</button></div>
-<div id="messages"><p class="empty">Press Start to begin.</p></div>
-<button id="message-btn" disabled>Add test message</button>
-</section>
-<div class="side">
-<section class="panel">
-<h3>Camera &amp; microphone</h3>
-<div class="camera"><video muted autoplay playsinline id="camera-view"></video><p id="no-camera">Camera OFF</p></div>
-<div class="mic-row"><span>Microphone</span><span id="mic-state">OFF</span></div>
-<div class="meter"><div id="mic-level"></div></div>
-<p class="soft tiny" id="sensor-status">Both required to start.</p>
-</section>
-<section class="panel">
-<h3>USB folder test</h3><p class="soft" id="usb-path">No folder selected</p><p class="soft tiny">Required for Protected demo. Folder selection does not prove a genuine encrypted USB device.</p>
-<div class="buttons"><button id="usb-btn">Choose folder</button><button id="usb-clear">Clear</button></div>
-</section>
-</div></div>
-<footer><div class="buttons">
-<button class="primary" id="start">Start</button>
-<button class="danger" id="end" disabled>End</button>
-<button id="fail" disabled>Test failure</button>
-</div><span id="notice">Ready</span></footer>
+ <section class="panel grow">
+  <div class="panel-top">
+   <div><h3>Chat</h3><p class="soft">120 seconds after Seen, or 120 seconds if unseen</p></div>
+   <button id="delete" class="subtle danger" disabled>Clear &amp; End</button>
+  </div>
+  <div id="messages"><p class="empty">Start to test message expiry.</p></div>
+  <button id="message-btn" disabled>Add dummy message</button>
+  <p class="soft tiny">Seen is simulated in this build. Actual authenticated recipient receipts still require remote messenger integration.</p>
+ </section>
+ <div class="side">
+  <section class="panel">
+   <h3>Connection</h3>
+   <p id="connection-detail" class="soft">No remote peer connected. Live audio/video calling is not available in this preview.</p>
+   <p id="drive-status" class="soft tiny">Local account</p>
+  </section>
+ </div>
+</div>
+<footer>
+ <div class="buttons">
+  <button class="primary" id="start">Start local test</button>
+  <button class="danger" id="end" disabled>End</button>
+  <button id="fail" disabled>Simulate failure</button>
+ </div>
+ <span id="notice">Ready</span>
+</footer>
 </main></div></body></html>
