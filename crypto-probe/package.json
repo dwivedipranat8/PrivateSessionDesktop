@@ -15,6 +15,7 @@
     "@libp2p/circuit-relay-v2": "4.2.13",
     "@libp2p/identify": "4.1.14",
     "@libp2p/crypto": "5.1.23",
-    "@libp2p/utils": "7.4.1"
+    "@libp2p/utils": "7.4.1",
+    "@multiformats/multiaddr": "13.0.3"
   }
 }

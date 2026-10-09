@@ -32,6 +32,8 @@ export async function createDesktopChat({
  let client;
  function fail(reason){
   if(ended)return;
+  // Stop exposing content before any asynchronous network teardown.
+  event({type:'cleared'});
   ended=true;
   if(interval)clearInterval(interval);
   incoming.clear();receipts.clear();
@@ -97,9 +99,8 @@ export async function createDesktopChat({
     event({type:'seen',id,expiresAt:receipts.expiresAt(id)});
   },
   onClearEnd:requestId=>{
-   event({type:'cleared'});fail('Peer Clear & End');
-   // A remote-clear acknowledgement cannot be sent after end. This is
-   // deliberately marked unconfirmed until the ACK path is integrated.
+   event({type:'cleared'});
+   void send('control',{kind:'clear_ack',requestId}).finally(()=>fail('Peer Clear & End'));
   },
   onClearAck:id=>{if(lastReceipt.has(id))lastReceipt.get(id)(true);},
   onEnd:()=>{event({type:'cleared'});fail('Peer ended');},
@@ -166,11 +167,27 @@ export async function createDesktopChat({
   async clearAndEnd(){
    if(ended)return false;
    event({type:'cleared'});
-   // Fail closed locally first. Never claim remote deletion without ACK.
+   // Conceal first. Give a short opportunity for authenticated Clear ACK, but
+   // never misreport an encrypted write as proof that the other peer erased.
    const id=randomBytes(24).toString('base64url');
-   const result=connected?await send('control',{kind:'clear_end',requestId:id}):false;
-   fail('Local Clear & End');
-   return {localCleared:true,peerDeliveryAttempted:result===true,peerConfirmed:false};
+   let resolveAck,confirmed=false;
+   const ack=new Promise(resolve=>{resolveAck=resolve;});
+   lastReceipt.set(id,resolveAck);
+   let delivered=false;
+   try{
+    if(connected){
+     const write=send('control',{kind:'clear_end',requestId:id});
+     const timeout=new Promise(resolve=>setTimeout(()=>resolve(false),250));
+     delivered=await Promise.race([write,timeout])===true;
+     if(delivered){
+      confirmed=await Promise.race([ack,new Promise(resolve=>setTimeout(()=>resolve(false),250))])===true;
+     }
+    }
+    return {localCleared:true,peerDeliveryAttempted:delivered,peerConfirmed:confirmed};
+   }finally{
+    lastReceipt.delete(id);
+    fail('Local Clear & End');
+   }
   },
   async close(){fail('Local stop');},
   async getTurnConfig(){if(!guard())throw Error('Not authorized for video');return client.getTemporaryTurn();}

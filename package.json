@@ -25,7 +25,9 @@
       "app/**/*",
       "ui/**/*",
       "core/**/*",
-      "package.json"
+      "package.json",
+      "crypto-probe/src/pinned-client.mjs",
+      "crypto-probe/src/desktop-chat.mjs"
     ],
     "directories": {
       "output": "dist"
@@ -59,6 +61,15 @@
     }
   },
   "dependencies": {
-    "@libp2p/crypto": "5.1.23"
+    "libp2p": "3.3.11",
+    "@libp2p/tcp": "11.0.28",
+    "@libp2p/noise": "17.0.3",
+    "@libp2p/yamux": "8.0.3",
+    "@libp2p/websockets": "10.1.21",
+    "@libp2p/circuit-relay-v2": "4.2.13",
+    "@libp2p/identify": "4.1.14",
+    "@libp2p/crypto": "5.1.23",
+    "@libp2p/utils": "7.4.1",
+    "@multiformats/multiaddr": "13.0.3"
   }
 }
