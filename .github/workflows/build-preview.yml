@@ -77,3 +77,21 @@ jobs:
       - name: Verify dummy authenticated Noise stream
         working-directory: crypto-probe
         run: npm test
+
+  relay-probe:
+    if: github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install private relay dependencies
+        working-directory: relay-service
+        run: npm install --no-audit --no-fund
+      - name: Run relay admission, TURN and local encrypted tests
+        working-directory: relay-service
+        run: npm test
+      - name: Syntax check relay service
+        working-directory: relay-service
+        run: node --check src/server.mjs
