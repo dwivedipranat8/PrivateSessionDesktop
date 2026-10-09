@@ -52,3 +52,12 @@ test('host and protected have independent leases, each at most one',()=>{
  assert.equal(r.accounts.isActive({...host,authenticatedPeerId:a}),true);
  assert.equal(r.accounts.isActive({...other,authenticatedPeerId:guest}),true);
 });
+
+test('old/revoked devices lose TURN and relay eligibility before generation reuse',()=>{
+ const r=env(),first=r.accounts.begin({authenticatedPeerId:a});
+ assert.equal(r.accounts.isCurrentDevice(a),true);
+ r.accounts.begin({authenticatedPeerId:b});
+ assert.equal(r.accounts.isCurrentDevice(a),false);
+ assert.equal(r.accounts.isCurrentDevice(b),true);
+ r.enrolled.delete(b);assert.equal(r.accounts.isCurrentDevice(b),false);
+});

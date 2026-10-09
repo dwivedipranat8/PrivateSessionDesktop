@@ -25,6 +25,14 @@ test('only Noise-authorized endpoint obtains temporary TURN credentials',{timeou
   assert.ok(address);
   const connection=await client.dial(address,{signal:AbortSignal.timeout(8000)});
   assert.equal(connection.remotePeer.toString(),service.peerId.toString());
+  const leaseStream=await client.dialProtocol(service.peerId,'/private-session/account-lease/1.0.0',{
+    signal:AbortSignal.timeout(8000)
+  });
+  const leaseLP=lpStream(leaseStream);
+  await leaseLP.write(new TextEncoder().encode(JSON.stringify({operation:'begin'})));
+  const leaseReply=JSON.parse(new TextDecoder().decode((await leaseLP.read()).subarray()));
+  assert.equal(leaseReply.ok,true);
+  await leaseStream.close();
   const stream=await client.dialProtocol(service.peerId,'/private-session/temporary-turn/1.0.0',{
    signal:AbortSignal.timeout(8000)
   });

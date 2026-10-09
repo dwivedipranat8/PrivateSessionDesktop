@@ -27,14 +27,23 @@ export async function createPrivateRelay({privateKey,enrolled,issuer,port=0,host
   if(!/^[a-z0-9][a-z0-9.-]{0,200}$/i.test(announceHost))throw Error('Invalid announce host');
   addresses.announce=['/dns4/'+announceHost+'/tcp/443/tls/ws'];
  }
- const sessions=accounts||new AccountSessions({enrolled});
- const node=await createLibp2p({
+ let node=null;
+ const sessions=accounts||new AccountSessions({enrolled,onRevoked:({peerId})=>{
+  // Best-effort immediate disruption of the superseded device's relay link.
+  // Endpoint MUST independently expire its own lease, including while offline.
+  for(const connection of node?.getConnections?.()||[]){
+   if(connection.remotePeer.toString()===peerId)
+    Promise.resolve(connection.close()).catch(()=>{});
+  }
+ }});
+ node=await createLibp2p({
   privateKey,addresses,transports:[webSockets()],
   connectionEncrypters:[noise()],streamMuxers:[yamux()],
   connectionGater:{
    denyInboundEncryptedConnection:peer=>!admit(enrolled,peer.toString()),
-   denyInboundRelayReservation:peer=>!admit(enrolled,peer.toString()),
-   denyOutboundRelayedConnection:(src,dst)=>!permittedPair(enrolled,src.toString(),dst.toString())
+   denyInboundRelayReservation:peer=>!sessions.isCurrentDevice(peer.toString()),
+   denyOutboundRelayedConnection:(src,dst)=>!permittedPair(enrolled,src.toString(),dst.toString())||
+     !sessions.isCurrentDevice(src.toString())||!sessions.isCurrentDevice(dst.toString())
   },
   services:{
    identify:identify(),
@@ -73,8 +82,8 @@ export async function createPrivateRelay({privateKey,enrolled,issuer,port=0,host
  await node.handle(TURN_PROTOCOL,async(stream,connection)=>{
   // Only a peer already authenticated by Noise can reach the protocol.
   const authenticatedPeer=connection.remotePeer.toString();
-  if(!admit(enrolled,authenticatedPeer)){
-   stream.abort(Error('Admission denied'));return;
+  if(!sessions.isCurrentDevice(authenticatedPeer)){
+   stream.abort(Error('No active account lease'));return;
   }
   try{
    const temporary=await issuer(authenticatedPeer);

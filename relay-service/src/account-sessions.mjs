@@ -21,7 +21,10 @@ export class AccountSessions {
  revoke(current,why){
   if(!current||current.revoked)return;
   current.revoked=true;
-  try{this.onRevoked({peerId:current.peerId,role:current.role,generation:current.generation,reason:why});}
+  try{
+   const event=this.onRevoked({peerId:current.peerId,role:current.role,generation:current.generation,reason:why});
+   if(event&&typeof event.catch==='function')event.catch(()=>{});
+  }
   catch{/* A notification failure cannot resurrect an old lease. */}
  }
  begin({authenticatedPeerId}={}){
@@ -40,6 +43,17 @@ export class AccountSessions {
   this.generation.set(role,generation);this.active.set(role,next);
   if(previous)this.revoke(previous,'superseded_by_new_authorized_device');
   return {role,sessionId,generation,expiresInMs:this.lifetimeMs};
+ }
+ isCurrentDevice(peerId){
+  const role=this.roleFor(peerId);
+  if(!role)return false;
+  const current=this.active.get(role);
+  if(!current||current.revoked||current.peerId!==peerId)return false;
+  if(this.clock()>=current.expires){
+   this.active.delete(role);this.revoke(current,'lease_expired');
+   return false;
+  }
+  return true;
  }
  isActive({authenticatedPeerId,sessionId,generation}={}){
   const role=this.roleFor(authenticatedPeerId);
