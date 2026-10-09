@@ -1,17 +1,17 @@
-name: Build dummy preview
+name: Security tests and opt-in packaging
 on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, development/security-engine]
+    branches: [main]
   workflow_dispatch:
     inputs:
       verify_packages:
-        description: Build Windows and Mac packages for a manual release-gate check
+        description: Build a Windows EXPERIMENTAL package manually (not a security-certified release)
         type: boolean
         default: false
       build_mac:
-        description: Build unsigned, untested Mac artifacts
+        description: Compile Mac guard and package a Mac EXPERIMENTAL artifact (manual opt-in)
         type: boolean
         default: false
 permissions:
@@ -29,7 +29,7 @@ jobs:
       - run: node --check app/preload.cjs
       - run: node --check ui/renderer.js
   windows:
-    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && inputs.verify_packages) || (github.event_name == 'pull_request' && github.head_ref == 'development/security-engine')
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && inputs.verify_packages)
     needs: test
     runs-on: windows-latest
     steps:
@@ -49,15 +49,15 @@ jobs:
           if-no-files-found: error
           retention-days: 7
       - uses: actions/upload-artifact@v4
-        if: github.event_name == 'pull_request' && github.head_ref == 'development/security-engine'
+        if: github.event_name == 'workflow_dispatch' && inputs.verify_packages && github.ref == 'refs/heads/development/security-engine'
         with:
-          name: Windows-Updated-Dummy-Preview-NOT-SECURE
+          name: Windows-EXPERIMENTAL-NOT-SECURE
           path: dist/*.exe
           if-no-files-found: error
           retention-days: 7
 
   mac:
-    if: github.event_name == 'workflow_dispatch' && (inputs.build_mac || inputs.verify_packages)
+    if: github.event_name == 'workflow_dispatch' && inputs.build_mac
     needs: test
     runs-on: macos-15
     steps:
@@ -74,7 +74,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: github.event_name == 'workflow_dispatch' && inputs.build_mac
         with:
-          name: Mac-Dummy-Preview-UNSIGNED
+          name: Mac-EXPERIMENTAL-UNSIGNED
           path: dist/*.zip
           if-no-files-found: error
           retention-days: 7
@@ -116,7 +116,7 @@ jobs:
         run: node --check src/server.mjs
 
   mac-guard-compile:
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/development/security-engine'
+    if: github.event_name == 'workflow_dispatch' && inputs.build_mac
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
