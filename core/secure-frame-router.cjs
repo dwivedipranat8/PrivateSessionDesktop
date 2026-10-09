@@ -21,7 +21,7 @@ class SecureFrameRouter {
    onHeartbeat,onRtc,onFailure});
   this.sentSequence=0;this.receivedSequence=0;
   this.controlReceived=0;this.rtcReceived=0;
-  this.closed=false;this.incoming=Promise.resolve();this.sending=Promise.resolve();
+  this.closed=false;this.incoming=Promise.resolve();this.sending=Promise.resolve();this.rtcProcessing=Promise.resolve();
  }
  fail(reason='Invalid authenticated session frame'){
   if(this.closed)return false;
@@ -75,11 +75,19 @@ class SecureFrameRouter {
    accepted=await this.onHeartbeat({...p,sessionId:this.sessionId},
     {authenticatedRemotePeerId:this.remotePeerId});
   }else{
-   const localSeq=this.rtcReceived+1;
-   accepted=await this.onRtc({...p,sessionId:this.sessionId,
-    senderDevice:this.remotePeerId,seq:localSeq},
-    {fromAuthenticatedPinnedNoisePeer:true});
-   if(accepted)this.rtcReceived=localSeq;
+   // Network sequence validation is fast, and all RTC work runs on its OWN
+   // serial queue. A stalled setRemoteDescription cannot starve heartbeat or
+   // authenticated End/clear instructions.
+   const localSeq=++this.rtcReceived;
+   const signal={...p,sessionId:this.sessionId,senderDevice:this.remotePeerId,seq:localSeq};
+   this.rtcProcessing=this.rtcProcessing.then(async()=>{
+    if(this.closed)return;
+    try{
+     const ok=await this.onRtc(signal,{fromAuthenticatedPinnedNoisePeer:true});
+     if(ok!==true)this.fail('RTC signalling rejected');
+    }catch{this.fail('RTC signalling handler failed');}
+   }).catch(()=>this.fail('RTC signal queue failed'));
+   accepted=true; // accepted for queued dispatch, not proof that RTC completed
   }
   if(accepted!==true)return this.fail('Authenticated frame rejected by session policy');
   this.receivedSequence=frame.seq;

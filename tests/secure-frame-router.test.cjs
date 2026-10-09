@@ -54,3 +54,37 @@ test('bad async session handler response fails close and never resumes',async()=
  assert.equal(r.route.closed,true);
  assert.equal(await r.route.send('heartbeat',{kind:'challenge',token:'12345678901234567890'}),false);
 });
+
+test('stalled RTC handler cannot hold up heartbeat and authenticated End',async()=>{
+ let finishRtc;const delivered=[],fail=[];
+ const route=new SecureFrameRouter({sessionId:SID,localPeerId:A,remotePeerId:B,
+   sendAuthenticated:async()=>true,
+   onControl:async frame=>{delivered.push('control:'+frame.kind);return true;},
+   onHeartbeat:async frame=>{delivered.push('heartbeat:'+frame.kind);return true;},
+   onRtc:async()=>new Promise(resolve=>{finishRtc=resolve;}),
+   onFailure:why=>fail.push(why)});
+ assert.equal(await route.receive(mk('rtc',1,'offer',{sdp:'DUMMY'}),{noiseRemotePeerId:B}),true);
+ // Start the asynchronous RTC handler without waiting on it.
+ await Promise.resolve();await Promise.resolve();
+ const safe=await Promise.race([
+   Promise.all([
+    route.receive(mk('heartbeat',2,'response',{token:'12345678901234567890'}),{noiseRemotePeerId:B}),
+    route.receive(mk('control',3,'end'),{noiseRemotePeerId:B})
+   ]),new Promise((_r,reject)=>setTimeout(()=>reject(Error('Heartbeat/End was blocked by RTC')),200))
+ ]);
+ assert.deepEqual(safe,[true,true]);
+ assert.deepEqual(delivered,['heartbeat:response','control:end']);
+ finishRtc(true);await route.rtcProcessing;
+ assert.deepEqual(fail,[]);
+});
+test('rejected asynchronous RTC action eventually refuses further session traffic',async()=>{
+ const fail=[];
+ const r=new SecureFrameRouter({sessionId:SID,localPeerId:A,remotePeerId:B,
+  sendAuthenticated:async()=>true,onControl:async()=>true,onHeartbeat:async()=>true,
+  onRtc:async()=>false,onFailure:why=>fail.push(why)});
+ assert.equal(await r.receive(mk('rtc',1,'offer'),{noiseRemotePeerId:B}),true);
+ await r.rtcProcessing;
+ assert.equal(r.closed,true);
+ assert.equal(await r.receive(mk('heartbeat',2,'challenge'),{noiseRemotePeerId:B}),false);
+ assert.equal(fail.length,1);
+});
