@@ -63,9 +63,14 @@
     if(state==='connected')this.ready=true;
    };
    if(initiator){
-     const offer=await this.pc.createOffer();
-     await this.pc.setLocalDescription(offer);
-     await this.sendFrame({kind:'offer',sdp:offer.sdp});
+     try{
+       const offer=await this.pc.createOffer();
+       await this.pc.setLocalDescription(offer);
+       await this.sendFrame({kind:'offer',sdp:offer.sdp});
+     }catch(err){
+       this.end('Media negotiation setup failed'); // also stops camera/mic
+       throw err;
+     }
    }else{
      // Chat/control MUST stay on the authenticated Noise channel, never on
      // a separate WebRTC data channel without the same session authorization.

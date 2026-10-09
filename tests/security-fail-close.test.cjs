@@ -10,7 +10,7 @@ test('hide / stop media BEFORE encrypted peer failure notification',async()=>{
  });
  const outcome=await guard.trigger();
  assert.deepEqual(actions,['hide','media','chat','encrypted-notice','keys']);
- assert.equal(outcome.notified,true);
+ assert.equal(outcome.deliveryAttempted,true);assert.equal(outcome.peerConfirmed,false);
  await guard.trigger();assert.equal(actions.length,5);
 });
 test('no connection still disposes keys and closes',async()=>{
@@ -19,7 +19,7 @@ test('no connection still disposes keys and closes',async()=>{
   stopMedia:()=>actions.push('media'),clearChat:()=>actions.push('chat'),
   sendAuthenticated:async()=>{throw Error('offline');},dispose:()=>actions.push('keys')});
  const r=await guard.trigger();
- assert.equal(r.notified,false);
+ assert.equal(r.deliveryAttempted,false);
  assert.deepEqual(actions,['hide','media','chat','keys']);
 });
 test('hung networking cannot prevent key disposal',async()=>{
