@@ -13,7 +13,7 @@
       return true;
     }
     expiresAt() {
-      const fallback = this.createdAt + 30000;
+      const fallback = this.createdAt + 20000;
       return this.seenAt === null ? fallback : Math.min(fallback, this.seenAt + 2000);
     }
   }

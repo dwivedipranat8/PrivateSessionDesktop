@@ -118,8 +118,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify release gate refuses unproven absolute anti-recording claims
         run: |
-          if node scripts/check-release.cjs; then
-            echo "SECURITY ERROR: unreviewed app was marked releasable"
+          set +e
+          node scripts/check-release.cjs > release-check.log 2>&1
+          result=$?
+          set -e
+          cat release-check.log
+          if [ "$result" -ne 1 ] || ! grep -q '^RELEASE_BLOCKED:' release-check.log || ! grep -q 'impossible_universal_capture_guarantee' release-check.log; then
+            echo "SECURITY ERROR: release gate did not produce expected refusal"
             exit 1
           fi
-          echo "Release remains blocked as intended."
+          echo "Release refusal explicitly verified."

@@ -98,7 +98,7 @@ function addMessage(){
  const foot=document.createElement('div');foot.className='bubble-foot';
  const seen=document.createElement('button');seen.className='seen';
  seen.textContent='Simulate Seen';
- const hint=document.createElement('small');hint.textContent='30s if unread';
+ const hint=document.createElement('small');hint.textContent='20s if unread';
  item.append(text);foot.append(seen,hint);item.append(foot);e('messages').append(item);
  messages.add(item);
  let timer=null;

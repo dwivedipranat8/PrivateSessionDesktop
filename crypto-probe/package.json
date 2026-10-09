@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "test": "node --test test/noise.test.mjs"
+    "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
     "libp2p": "3.3.11",
