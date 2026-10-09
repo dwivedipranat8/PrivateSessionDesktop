@@ -1,15 +1,44 @@
 'use strict';
 const {app,BrowserWindow,ipcMain,dialog,session,net,powerMonitor}=require('electron');
 const fs=require('node:fs'),path=require('node:path');
+const {pathToFileURL}=require('node:url');
 const {DemoSession}=require('../core/session.cjs');
 const demo=new DemoSession();
-let win=null,folder=null,role='host',mediaDeadline=0,interval=null;
+let win=null,folder=null,role=null,profile=null,mediaDeadline=0,interval=null,lastUnlockAttempt=0;
+let modulePromise=null;
+function profileLibrary(){
+ if(!modulePromise)modulePromise=import(pathToFileURL(path.join(__dirname,'../crypto-probe/src/local-profiles.mjs')).href);
+ return modulePromise;
+}
+function hostProfilePath(){return path.join(app.getPath('userData'),'PrivateSession.identity.enc.json');}
+function portableProfilePath(){
+ const executable=path.resolve(process.execPath);
+ if(process.platform==='darwin'){
+  const match=/^\/Volumes\/[^/]+\//.exec(executable);
+  if(!match)return null; // Protected app MUST run from a mounted volume.
+  return path.join(match[0],'PrivateSession.identity.enc.json');
+ }
+ // Portable Windows EXE: adjacent profile path. Removability is NOT verified.
+ return path.join(path.dirname(executable),'PrivateSession.identity.enc.json');
+}
+function knownPaths(){
+ const result=[hostProfilePath(),portableProfilePath()].filter(Boolean);
+ return [...new Set(result)];
+}
+function profileExists(p){try{return fs.statSync(p).isFile();}catch{return false;}}
+function accountSummary(){return {registered:knownPaths().some(profileExists),unlocked:!!profile};}
+function wipeProfile(){
+ try{profile?.identity?.privateKeyBytes?.fill(0);}catch{}
+ profile=null;role=null;folder=null;
+}
+
 function stop(reason){
  // Always invalidate pending permission/Start attempts, even when the demo
  // has not reached active state. A delayed renderer getUserMedia result must
  // be discarded and its tracks stopped after lock, sleep, USB loss or End.
  mediaDeadline=0;
  demo.end(reason);
+ wipeProfile();
  const status={...demo.status(),reason};
  if(win&&!win.isDestroyed())win.webContents.send('p:stopped',status);
  return status;
@@ -21,7 +50,9 @@ function isAvailable(p){
 function guardReady(){
  // Demo-only folder simulation; neither volume identity nor encryption is
  // verified here. Real protected profile must be bound to enrolled USB.
- if(role==='guest'&&!folder)return {ok:false,error:'Protected preview needs a selected USB test folder'};
+ if(!profile)return {ok:false,error:'Unlock an encrypted local profile first'};
+ if(role==='guest'&&!folder)return {ok:false,error:'Protected profile must be on an available volume'};
+ if(role==='guest'&&!profileExists(profile.profilePath))return {ok:false,error:'Encrypted device profile removed'};
  if(folder&&!isAvailable(folder))return {ok:false,error:'Test USB folder unavailable'};
  if(!net.isOnline())return {ok:false,error:'Network reports offline'};
  return {ok:true};
@@ -35,14 +66,49 @@ function register(name,fn){
 }
 app.whenReady().then(()=>{
  const volatileSession=session.fromPartition('local-dummy-preview');
- const canUseMedia=wc=>!!win&&!win.isDestroyed()&&wc?.id===win.webContents.id &&
+ const canUseMedia=wc=>!!profile&&role==='guest'&&!!win&&!win.isDestroyed()&&wc?.id===win.webContents.id &&
     (demo.active||Date.now()<mediaDeadline);
  volatileSession.setPermissionRequestHandler((wc,permission,callback)=>{
    callback(permission==='media'&&canUseMedia(wc));
  });
  volatileSession.setPermissionCheckHandler((wc,permission)=>
    permission==='media'&&canUseMedia(wc));
- register('status',()=>({...demo.status(),folder,role}));
+ register('status',()=>({...demo.status(),role,unlocked:!!profile,
+    registered:knownPaths().some(profileExists)}));
+ register('account-status',()=>accountSummary());
+ register('account-setup',async(location,passphrase)=>{
+   if(profile||demo.active||Date.now()<mediaDeadline||
+      !['local','portable'].includes(location))return {ok:false,error:'Setup unavailable'};
+   if(typeof passphrase!=='string'||Buffer.byteLength(passphrase,'utf8')<16)
+    return {ok:false,error:'Use a passphrase of at least 16 characters'};
+   const target=location==='local'?hostProfilePath():portableProfilePath();
+   if(!target)return {ok:false,error:'Launch the protected app from the encrypted mounted drive'};
+   if(profileExists(target))return {ok:false,error:'An encrypted profile already exists'};
+   try{
+    const lib=await profileLibrary();
+    if(location==='local')fs.mkdirSync(path.dirname(target),{recursive:true,mode:0o700});
+    await lib.createLocalProfile({target,role:location==='local'?'host':'protected',passphrase});
+    const result=await lib.unlockLocalProfile({targets:[target],passphrase});
+    profile=result;role=result.role==='protected'?'guest':'host';
+    folder=result.role==='protected'?path.dirname(result.profilePath):null;
+    return {ok:true,role,registered:true,unlocked:true};
+   }catch{return {ok:false,error:'Profile setup failed; check drive and password, do not overwrite damaged profiles'};}
+ });
+ register('account-unlock',async(passphrase)=>{
+   if(profile||demo.active)return {ok:false,error:'Already unlocked'};
+   if(typeof passphrase!=='string')return {ok:false,error:'Password required'};
+   const now=Date.now();
+   if(now-lastUnlockAttempt<750)return {ok:false,error:'Wait before retrying'};
+   lastUnlockAttempt=now;
+   try{
+    const lib=await profileLibrary();
+    const result=await lib.unlockLocalProfile({targets:knownPaths(),passphrase});
+    profile=result;role=result.role==='protected'?'guest':'host';
+    folder=result.role==='protected'?path.dirname(result.profilePath):null;
+    return {ok:true,role,unlocked:true};
+   }catch{return {ok:false,error:'Incorrect password or encrypted profile not available'};}
+ });
+ register('account-lock',()=>{stop('Account locked');return {ok:true};});
  register('arm-media',()=>{
    if(demo.active)return {ok:false,error:'Session already active'};
    const check=guardReady();if(!check.ok)return check;
@@ -58,10 +124,6 @@ app.whenReady().then(()=>{
  });
  register('stop',()=>stop('Ended locally'));
  register('fail',()=>stop('Simulated failure'));
- register('set-role',next=>{
-   if(demo.active||Date.now()<mediaDeadline||!['host','guest'].includes(next))return {ok:false};
-   role=next;return {ok:true,role};
- });
  register('clear-end',()=>{
    if(!demo.active)return {ok:false,error:'No active demo session'};
    // Both roles may Clear & End. This preview has no remote peer to notify.
@@ -69,16 +131,13 @@ app.whenReady().then(()=>{
    return {ok:true};
  });
  register('folder',async()=>{
-   if(demo.active)return {ok:false,error:'End first'};
+   if(demo.active||!profile||role!=='guest')return {ok:false,error:'USB profile location is fixed'};
    const result=await dialog.showOpenDialog(win,{title:'Choose a test folder',properties:['openDirectory']});
    if(result.canceled||!result.filePaths.length)return {ok:false,error:'Cancelled'};
    if(!isAvailable(result.filePaths[0]))return {ok:false,error:'Folder unavailable'};
    folder=result.filePaths[0];return {ok:true,folder};
  });
- register('clear-folder',()=>{
-   if(demo.active)return {ok:false,error:'End first'};
-   folder=null;return {ok:true};
- });
+
  win=new BrowserWindow({
    width:1020,height:700,minWidth:740,minHeight:540,show:false,
    title:'Private Session — Local Preview',backgroundColor:'#0d182a',
@@ -97,12 +156,15 @@ app.whenReady().then(()=>{
  win.on('close',()=>stop('Window closed'));
  win.loadFile(path.join(__dirname,'../ui/index.html'));
  win.once('ready-to-show',()=>{if(win&&!win.isDestroyed())win.show();});
- powerMonitor.on('lock-screen',()=>stop('Device locked'));
- powerMonitor.on('suspend',()=>stop('Device sleeping'));
+ powerMonitor.on('lock-screen',()=>{stop('Device locked');app.quit();});
+ powerMonitor.on('suspend',()=>{stop('Device sleeping');app.quit();});
  interval=setInterval(()=>{
    if(!demo.active)return;
    const result=guardReady();
-   if(!result.ok)stop(result.error);
+   if(!result.ok){
+    stop(result.error);
+    if(/offline|removed|unavailable/i.test(result.error))app.quit();
+   }
  },500);
 });
 app.on('before-quit',()=>{stop('App quit');if(interval)clearInterval(interval);});

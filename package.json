@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "license": "UNLICENSED",
-  "description": "Local dummy preview with 120-second expiry and bilateral Clear & End",
+  "description": "Unreleased local encrypted-profile preview; NOT a secure messenger",
   "main": "app/main.cjs",
   "scripts": {
     "start": "electron .",
@@ -20,6 +20,8 @@
     "productName": "Private Session Dummy Preview",
     "asar": true,
     "files": [
+      "crypto-probe/src/identity.mjs",
+      "crypto-probe/src/local-profiles.mjs",
       "app/**/*",
       "ui/**/*",
       "core/**/*",
@@ -55,5 +57,8 @@
         "NSMicrophoneUsageDescription": "Local microphone preview test only."
       }
     }
+  },
+  "dependencies": {
+    "@libp2p/crypto": "5.1.23"
   }
 }
