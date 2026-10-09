@@ -26,7 +26,7 @@ test('TURN-only media, fresh certificate and explicitly approved local tracks',a
  sendAuthenticated:e=>{sent.push(e);},rtcCtor:f.RTC});
  await call.prepare({localStream:s,iceServers:[{urls:'turns:relay.example.org:5349',username:'temp',credential:'temp'}],initiator:true});
  assert.equal(f.made[0].configuration.iceTransportPolicy,'relay');
- assert.equal(typeof f.made[0].ondatachannel,'undefined');
+ assert.equal(typeof f.made[0].ondatachannel,'function');
  assert.equal(sent[0].kind,'offer');assert.equal(sent[0].sessionId,SESSION);
  call.end();assert.equal(s.getTracks().every(t=>t.readyState==='ended'),true);
 });
