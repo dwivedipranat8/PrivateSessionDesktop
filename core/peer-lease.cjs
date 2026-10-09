@@ -4,7 +4,7 @@ class PeerLease{
   constructor({sessionId,clock=()=>performance.now(),random=()=>randomBytes(24).toString('base64url'),onProtect=()=>{},onExpire=()=>{}}){
     if(typeof sessionId!=='string'||sessionId.length<12)throw Error('Verified session identifier required');
     this.sessionId=sessionId;this.clock=clock;this.random=random;this.onProtect=onProtect;this.onExpire=onExpire;
-    this.phase='awaiting-proof';this.outstanding=new Map();this.proof=null;
+    this.phase='awaiting-proof';this.createdAt=this.clock();this.outstanding=new Map();this.proof=null;
   }
   challenge(){
     if(this.phase==='protected'||this.phase==='expired')return null;
@@ -28,6 +28,8 @@ class PeerLease{
   }
   tick(){
     if(this.phase==='expired')return this.phase;
+    // A peer that never provides its first proof cannot remain pending forever.
+    if(this.proof===null&&this.clock()-this.createdAt>=5000){this.invalidate();return this.phase;}
     if(this.proof!==null&&this.clock()-this.proof>=5000){this.invalidate();return this.phase;}
     if(this.proof!==null&&this.clock()-this.proof>=3000&&this.phase!=='protected'){
       this.phase='protected';this.outstanding.clear();this.onProtect();
