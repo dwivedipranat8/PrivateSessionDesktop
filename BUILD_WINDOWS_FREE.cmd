@@ -32,20 +32,20 @@ echo [2/6] Running application and session-security tests...
 call npm test >> "%BUILDLOG%" 2>&1
 if errorlevel 1 goto fail
 
-echo [3/6] Installing Noise E2EE test dependencies...
-pushd crypto-probe
+echo [3/6] Installing and testing restricted relay (needed by crypto suite)...
+pushd relay-service
 call npm install --no-audit --no-fund >> "%BUILDLOG%" 2>&1
 if errorlevel 1 goto backfail
-
-echo [4/6] Running E2EE, authenticated Seen and relay tests...
 call npm test >> "%BUILDLOG%" 2>&1
 if errorlevel 1 goto backfail
 popd
 
-echo [5/6] Installing and testing the restricted relay service...
-pushd relay-service
+echo [4/6] Installing Noise E2EE integration dependencies...
+pushd crypto-probe
 call npm install --no-audit --no-fund >> "%BUILDLOG%" 2>&1
 if errorlevel 1 goto backfail
+
+echo [5/6] Testing E2EE, authenticated Seen and restricted relay...
 call npm test >> "%BUILDLOG%" 2>&1
 if errorlevel 1 goto backfail
 popd
