@@ -3,7 +3,8 @@ import {randomBytes,scrypt as scryptCallback,createCipheriv,createDecipheriv,
 import {promisify} from 'node:util';
 import {generateKeyPair,privateKeyFromProtobuf,privateKeyToProtobuf,publicKeyToProtobuf} from '@libp2p/crypto/keys';
 const scrypt=promisify(scryptCallback);
-const SCHEMA=1,CONTEXT=Buffer.from('PrivateSession|IdentityProfile|v1','utf8');
+const SCHEMA=2,CONTEXT=Buffer.from('PrivateSession|IdentityProfile|v1','utf8');
+const ACCOUNT_ROLES=new Set(['host','protected']);
 const KEY_LEN=32,PROFILE_MAX=9000,SCRYPT_OPTS={N:65536,r:8,p:1,maxmem:128*1024*1024};
 const enc=b=>Buffer.from(b).toString('base64url');
 function dec(value,max=PROFILE_MAX){
@@ -28,7 +29,8 @@ export async function newIdentity(){
  const fp=fingerprint(publicBytes);
  return {privateKeyBytes:priv,publicKeyBytes:publicBytes,fingerprint:fp};
 }
-export async function lockIdentity(privateKeyBytes,password){
+export async function lockIdentity(privateKeyBytes,password,{accountRole}={}){
+ if(!ACCOUNT_ROLES.has(accountRole))throw Error('Explicit Host or Protected account required');
  checkPassword(password);
  const source=Buffer.from(privateKeyBytes);
  if(source.length<16||source.length>PROFILE_MAX)throw Error('Invalid private identity');
@@ -40,21 +42,22 @@ export async function lockIdentity(privateKeyBytes,password){
   key=await scrypt(password,salt,KEY_LEN,SCRYPT_OPTS);
   const cipher=createCipheriv('aes-256-gcm',key,iv,{authTagLength:16});
   const fp=fingerprint(publicBytes);
-  const aad=Buffer.concat([CONTEXT,Buffer.from(fp,'utf8')]);
+  const aad=Buffer.concat([CONTEXT,Buffer.from(fp,'utf8'),Buffer.from('|'+accountRole,'utf8')]);
   cipher.setAAD(aad);
   const ciphertext=Buffer.concat([cipher.update(source),cipher.final()]);
-  return JSON.stringify({version:SCHEMA,kdf:'scrypt-65536-8-1',enc:'aes-256-gcm',
+  return JSON.stringify({version:SCHEMA,accountRole,kdf:'scrypt-65536-8-1',enc:'aes-256-gcm',
    publicKey:enc(publicBytes),fingerprint:fp,salt:enc(salt),iv:enc(iv),
    data:enc(ciphertext),tag:enc(cipher.getAuthTag())});
  }finally{key?.fill(0);source.fill(0);publicBytes.fill(0);}
 }
-export async function unlockIdentity(serialized,password){
+export async function unlockIdentity(serialized,password,{expectedAccountRole}={}){
+ if(!ACCOUNT_ROLES.has(expectedAccountRole))throw Error('Explicit account role required');
  checkPassword(password);
  if(typeof serialized!=='string'||Buffer.byteLength(serialized,'utf8')>PROFILE_MAX*4)
   throw Error('Invalid encrypted profile');
  let obj;
  try{obj=JSON.parse(serialized);}catch{throw Error('Invalid encrypted profile');}
- if(!obj||obj.version!==SCHEMA||obj.kdf!=='scrypt-65536-8-1'||obj.enc!=='aes-256-gcm')
+ if(!obj||obj.version!==SCHEMA||obj.accountRole!==expectedAccountRole||obj.kdf!=='scrypt-65536-8-1'||obj.enc!=='aes-256-gcm')
   throw Error('Unsupported identity profile version');
  const salt=dec(obj.salt,16),iv=dec(obj.iv,12),tag=dec(obj.tag,16);
  if(salt.length!==16||iv.length!==12||tag.length!==16)throw Error('Invalid profile parameters');
@@ -65,14 +68,14 @@ export async function unlockIdentity(serialized,password){
  try{
   key=await scrypt(password,salt,KEY_LEN,SCRYPT_OPTS);
   const cipher=createDecipheriv('aes-256-gcm',key,iv,{authTagLength:16});
-  cipher.setAAD(Buffer.concat([CONTEXT,Buffer.from(fp,'utf8')]));
+  cipher.setAAD(Buffer.concat([CONTEXT,Buffer.from(fp,'utf8'),Buffer.from('|'+expectedAccountRole,'utf8')]));
   cipher.setAuthTag(tag);
   plaintext=Buffer.concat([cipher.update(ciphertext),cipher.final()]);
   const original=privateKeyFromProtobuf(plaintext);
   const expected=Buffer.from(publicKeyToProtobuf(original.publicKey));
   if(pub.length!==expected.length||!timingSafeEqual(pub,expected))throw Error('Profile public key mismatch');
   // Return a fresh application-owned buffer; caller must dispose it at End.
-  return {privateKeyBytes:Buffer.from(plaintext),publicKeyBytes:Buffer.from(pub),fingerprint:fp};
+  return {privateKeyBytes:Buffer.from(plaintext),publicKeyBytes:Buffer.from(pub),fingerprint:fp,accountRole:expectedAccountRole};
  }catch{throw Error('Password incorrect or profile damaged');}
  finally{key?.fill(0);plaintext?.fill(0);}
 }
