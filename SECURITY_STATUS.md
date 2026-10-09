@@ -72,3 +72,25 @@ hardware and OS. Even extensive tests cannot establish **zero bugs**.
 The development source now has real E2EE components wired to the interface;
 passing cloud tests must not be misrepresented as proven confidentiality
 against endpoint compromise or all capture utilities.
+
+
+## October 9 continued audit notes
+- Fixed a critical Electron lifecycle bug: the generic stop() path previously
+  cleared the profile but did not close the active Noise transport. It now
+  detaches/closes that client before clearing secrets. Late callbacks are
+  invalidated by an auth epoch.
+- Remote authenticated Clear, conceal, and closed status now cause immediate
+  main-process window concealment; renderer Clear/conceal stops camera/mic.
+- Added a 256-message bound for pending incoming and outgoing receipt state,
+  with regression tests. Two targeted, source-loaded checks passed outside CI:
+  Seen+120s and capacity, and authenticated Clear with replay rejection.
+- After GitHub Actions began failing, all recent jobs report runner_id=0 and
+  steps=[], without uploading packages. This resembles a billing/spending or
+  runner provisioning restriction; exact cause cannot be established using
+  the GitHub integration's available job logs. Check owner billing/usage.
+- Reduced Actions load: development branch no longer triggers a duplicate
+  push run in addition to PR; Windows and Mac packaging now require a
+  user-initiated workflow_dispatch opt-in. No app package can be claimed
+  successful until the opt-in job runs and produces a GitHub Artifact.
+- The new post-change code is **not fully CI-tested** because runners are
+  not starting. Previous passing suites do not certify later commits.
