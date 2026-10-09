@@ -39,7 +39,7 @@ test('even a forged successful role mismatch cannot extend account access',async
  r.lease.begin({role:'host',sessionId,generation:1,expiresInMs:3000});
  assert.equal(await r.lease.tick(),false);
 });
-test('can't start with wrong-account or expired lease',()=>{
+test('cannot start with wrong-account or expired lease',()=>{
  const r=rig();
  assert.throws(()=>r.lease.begin({role:'protected',sessionId,generation:1,expiresInMs:3000}));
  assert.throws(()=>r.lease.begin({role:'host',sessionId,generation:1,expiresInMs:999999}));
