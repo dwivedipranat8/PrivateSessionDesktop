@@ -44,7 +44,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
   mac:
-    if: github.ref == 'refs/heads/development/security-engine' || (github.event_name == 'workflow_dispatch' && inputs.build_mac)
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/development/security-engine' || (github.event_name == 'workflow_dispatch' && inputs.build_mac)
     needs: test
     runs-on: macos-15
     steps:
