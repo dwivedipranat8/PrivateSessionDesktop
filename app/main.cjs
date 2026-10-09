@@ -96,6 +96,15 @@ app.whenReady().then(()=>{
  register('status',()=>({...demo.status(),role,unlocked:!!profile,
     registered:knownPaths().some(profileExists)}));
  register('account-status',()=>accountSummary());
+ register('my-peer-id',async()=>{
+   if(!profile)return {ok:false};
+   try{
+    const {privateKeyFromProtobuf}=await import('@libp2p/crypto/keys');
+    const {peerIdFromPrivateKey}=await import('@libp2p/peer-id');
+    if(!profile)return {ok:false};
+    return {ok:true,peerId:peerIdFromPrivateKey(privateKeyFromProtobuf(profile.identity.privateKeyBytes)).toString()};
+   }catch{return {ok:false};}
+ });
  register('account-setup',async(location,passphrase)=>{
    if(profile||demo.active||Date.now()<mediaDeadline||
       !['local','portable'].includes(location))return {ok:false,error:'Setup unavailable'};
@@ -207,6 +216,11 @@ app.whenReady().then(()=>{
    try{if(selected)result=await selected.clearAndEnd();}
    finally{stop('Cleared and ended');}
    return result;
+ });
+ register('peer-rtc',async(signal)=>{
+   if(!demo.active||!liveChat?.connected)return {ok:false};
+   try{return {ok:await liveChat.sendRtcSignal(signal)};}
+   catch{return {ok:false};}
  });
  register('peer-turn',async()=>{
    if(!demo.active||!liveChat?.connected)return {ok:false,error:'No active authorized peer'};

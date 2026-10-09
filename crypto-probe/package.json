@@ -16,6 +16,7 @@
     "@libp2p/identify": "4.1.14",
     "@libp2p/crypto": "5.1.23",
     "@libp2p/utils": "7.4.1",
-    "@multiformats/multiaddr": "13.0.3"
+    "@multiformats/multiaddr": "13.0.3",
+    "@libp2p/peer-id": "6.0.14"
   }
 }

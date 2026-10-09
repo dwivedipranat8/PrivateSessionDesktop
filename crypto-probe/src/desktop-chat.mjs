@@ -73,7 +73,10 @@ export async function createDesktopChat({
    return send('heartbeat',{kind:'response',token:frame.token});
   }
   if(frame.kind==='response'){
-   return peerLease?.accept({...frame,sessionId},{authenticated:true})===true;
+   const old=peerLease?.active===true;
+   const accepted=peerLease?.accept({...frame,sessionId},{authenticated:true})===true;
+   if(accepted&&!old)event({type:'ready'});
+   return accepted;
   }
   return false;
  }
@@ -87,7 +90,10 @@ export async function createDesktopChat({
   onFailure:fail,
   onControl:(frame,meta)=>control.receive(frame,meta),
   onHeartbeat:respondHeartbeat,
-  onRtc:async()=>false // Cannot display/use media before its real integration.
+  onRtc:async frame=>{
+   if(!guard())return false;
+   event({type:'rtc-signal',frame});return true;
+  }
  });
  control=new SecureControl({
   sessionId,approvedRemoteDevice:approvedPeerId,hostDeviceId:role==='host'?client.peerId:approvedPeerId,
@@ -189,6 +195,21 @@ export async function createDesktopChat({
     fail('Local Clear & End');
    }
   },
+  async sendRtcSignal(frame){
+   if(!guard()||!frame||!['offer','answer','candidate','end'].includes(frame.kind))
+    return false;
+   const payload={kind:frame.kind};
+   if(frame.kind==='offer'||frame.kind==='answer'){
+    if(typeof frame.sdp!=='string'||frame.sdp.length>64000||frame.sdp.length<20)return false;
+    payload.sdp=frame.sdp;
+   }
+   if(frame.kind==='candidate'){
+    if(typeof frame.candidate?.candidate!=='string'||frame.candidate.candidate.length>8192)return false;
+    payload.candidate=frame.candidate;
+   }
+   return send('rtc',payload);
+  },
+  get peerIdForRtc(){return approvedPeerId;},
   async close(){fail('Local stop');},
   async getTurnConfig(){if(!guard())throw Error('Not authorized for video');return client.getTemporaryTurn();}
  });
