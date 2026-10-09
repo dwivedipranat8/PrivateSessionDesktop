@@ -1,63 +1,148 @@
 'use strict';
 const api=window.preview,e=id=>document.getElementById(id);
-let active=false,generation=0,camera=null,microphone=null;const timers=new Set();
+let active=false,starting=false,generation=0,attempt=0,stream=null,audioContext=null;
+let analyser=null,analyserTimer=null,role='host';
+const messageTimers=new Set();
+const messages=new Set();
 function clearMessages(text){
-  for(const t of timers)clearTimeout(t);timers.clear();e('messages').replaceChildren();
-  const p=document.createElement('p');p.className='empty';p.textContent=text;e('messages').append(p);
+ for(const timer of messageTimers)clearTimeout(timer);messageTimers.clear();
+ messages.clear();e('messages').replaceChildren();
+ if(text){const p=document.createElement('p');p.className='empty';p.textContent=text;e('messages').append(p);}
 }
 function stopMedia(){
-  for(const s of [camera,microphone])if(s)s.getTracks().forEach(t=>t.stop());
-  camera=null;microphone=null;e('camera-view').pause();e('camera-view').srcObject=null;
-  e('camera-view').style.display='none';e('no-camera').style.display='block';
-  e('camera-btn').textContent='Test camera';e('mic-btn').textContent='Test mic';
-  e('sensor-status').textContent='No local sensor active.';
+ if(analyserTimer){clearInterval(analyserTimer);analyserTimer=null;}
+ analyser=null;
+ if(audioContext){const old=audioContext;audioContext=null;old.close().catch(()=>{});}
+ if(stream){for(const t of stream.getTracks()){t.onended=null;t.onmute=null;t.stop();}stream=null;}
+ e('camera-view').pause();e('camera-view').srcObject=null;
+ e('camera-view').style.display='none';e('no-camera').style.display='block';
+ e('mic-level').style.width='0%';e('mic-state').textContent='OFF';
+ e('sensor-status').textContent='Both required to start.';
 }
-function redraw(){
-  e('status').textContent=active?'Demo active':'Inactive';
-  for(const id of ['end','fail','message-btn','camera-btn','mic-btn'])e(id).disabled=!active;
-  for(const id of ['start','usb-btn','usb-clear'])e(id).disabled=active;
+function draw(){
+ e('status').textContent=active?'Active':starting?'Preparing':'Inactive';
+ e('status').className=active?'live':'';
+ for(const id of ['end','fail','message-btn'])e(id).disabled=!active;
+ e('start').disabled=active||starting;
+ e('start').textContent=starting?'Checking devices…':'Start';
+ for(const id of ['usb-btn','usb-clear','role'])e(id).disabled=active||starting;
+ e('delete').hidden=role!=='host';
+ e('delete').disabled=!active||role!=='host';
 }
-function stop(msg){
-  active=false;generation++;clearMessages('Session ended. Old dummy messages will not return.');
-  stopMedia();redraw();e('notice').textContent=msg||'Ended';
+function stop(reason){
+ active=false;starting=false;attempt+=1;generation+=1;
+ clearMessages('Chat closed');stopMedia();draw();
+ e('notice').textContent=reason||'Ended';
 }
-e('start').onclick=async()=>{
-  try{
-    const r=await api.start();if(!r.ok){e('notice').textContent=r.error;return;}
-    active=true;generation=r.generation;clearMessages('Add a dummy test message.');
-    redraw();e('notice').textContent='Local demo only — nobody is connected.';
-  }catch(err){e('notice').textContent=err.message;}
-};
-e('end').onclick=()=>{stop('Ended locally');api.stop().catch(()=>{});};
-e('fail').onclick=()=>{stop('Simulated failure');api.fail().catch(()=>{});};
-e('message-btn').onclick=()=>{
-  if(!active)return;
-  if(e('messages').querySelector('.empty'))e('messages').replaceChildren();
-  const d=document.createElement('div');d.className='bubble';d.textContent='TEST MESSAGE: NOT ENCRYPTED OR SENT';
-  const small=document.createElement('small');small.textContent='Expires in 30 seconds';d.append(small);e('messages').append(d);
-  const at=generation;
-  const id=setTimeout(()=>{timers.delete(id);if(active&&generation===at)d.remove();},30000);timers.add(id);
-};
-async function sensor(kind){
-  if(!active)return;const old=kind==='camera'?camera:microphone;
-  if(old){
-    old.getTracks().forEach(t=>t.stop());
-    if(kind==='camera'){camera=null;e('camera-view').srcObject=null;e('camera-view').style.display='none';e('no-camera').style.display='block';e('camera-btn').textContent='Test camera';}
-    else{microphone=null;e('mic-btn').textContent='Test mic';}
-    e('sensor-status').textContent=kind+' stopped';return;
+async function requestStop(reason,command){
+ stop(reason);try{await command();}catch{}
+}
+function checkTracks(s){
+ return s&&s.getVideoTracks().some(t=>t.readyState==='live'&&!t.muted)&&
+    s.getAudioTracks().some(t=>t.readyState==='live'&&!t.muted);
+}
+function setupMicrophoneMeter(s){
+ try{
+  const AudioCtor=window.AudioContext||window.webkitAudioContext;
+  if(!AudioCtor)return;
+  const ctx=new AudioCtor();audioContext=ctx;
+  const source=ctx.createMediaStreamSource(new MediaStream(s.getAudioTracks()));
+  const a=ctx.createAnalyser();a.fftSize=1024;source.connect(a);analyser=a;
+  ctx.resume().catch(()=>{});
+  const data=new Uint8Array(a.fftSize);
+  analyserTimer=setInterval(()=>{
+   if(!active||!stream||!checkTracks(stream)){if(active)requestStop('Camera or microphone unavailable',api.stop);return;}
+   a.getByteTimeDomainData(data);let sum=0;
+   for(const v of data){const d=(v-128)/128;sum+=d*d;}
+   const rms=Math.sqrt(sum/data.length);
+   e('mic-level').style.width=Math.min(100,Math.round(rms*380))+'%';
+  },180);
+ }catch{e('sensor-status').textContent='Mic on · activity meter unavailable';}
+}
+async function start(){
+ if(active||starting)return;
+ const mine=++attempt;starting=true;draw();e('notice').textContent='Allow camera and microphone';
+ let candidate=null;
+ try{
+  const allowed=await api.armMedia();
+  if(!allowed.ok)throw Error(allowed.error||'Cannot start');
+  candidate=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+  if(mine!==attempt){candidate.getTracks().forEach(t=>t.stop());return;}
+  if(!checkTracks(candidate))throw Error('Camera and microphone must both work');
+  const begun=await api.start();
+  if(mine!==attempt){candidate.getTracks().forEach(t=>t.stop());await api.stop();return;}
+  if(!begun.ok)throw Error(begun.error||'Cannot start');
+  stream=candidate;candidate=null;active=true;starting=false;generation=begun.generation;
+  clearMessages('Add a test message');draw();
+  e('camera-view').srcObject=stream;e('camera-view').style.display='block';
+  e('no-camera').style.display='none';
+  e('mic-state').textContent='ON';e('sensor-status').textContent='Camera + microphone active locally';
+  e('notice').textContent='Local preview — no remote connection';
+  for(const t of stream.getTracks()){
+    t.onended=()=>{if(active)requestStop('Required device disconnected',api.stop);};
+    t.onmute=()=>{if(active)requestStop('Required device unavailable',api.stop);};
   }
-  const at=generation;
-  try{
-    const p=await api.sensor(kind);if(!p.ok||!active||at!==generation)return;
-    const s=await navigator.mediaDevices.getUserMedia(kind==='camera'?{video:true,audio:false}:{video:false,audio:true});
-    if(!active||at!==generation){s.getTracks().forEach(t=>t.stop());return;}
-    if(kind==='camera'){camera=s;e('camera-view').srcObject=s;e('camera-view').style.display='block';e('no-camera').style.display='none';e('camera-btn').textContent='Stop camera';}
-    else{microphone=s;e('mic-btn').textContent='Stop mic';}
-    e('sensor-status').textContent='Local '+kind+' active; not transmitted.';
-  }catch(err){e('sensor-status').textContent='Sensor not available: '+err.name;}
+  setupMicrophoneMeter(stream);
+ }catch(err){
+  if(candidate)candidate.getTracks().forEach(t=>t.stop());
+  if(mine===attempt){starting=false;draw();e('notice').textContent='Cannot start: '+(err?.message||'Check permissions');}
+ }
 }
-e('camera-btn').onclick=()=>sensor('camera');e('mic-btn').onclick=()=>sensor('microphone');
-e('usb-btn').onclick=async()=>{const r=await api.folder();e('notice').textContent=r.ok?'Test folder selected':r.error;if(r.ok)e('usb-path').textContent=r.folder;};
-e('usb-clear').onclick=async()=>{const r=await api.clearFolder();if(r.ok)e('usb-path').textContent='None chosen';};
+function addMessage(){
+ if(!active)return;
+ if(e('messages').querySelector('.empty'))e('messages').replaceChildren();
+ const ownerGeneration=generation;
+ const policy=new window.MessagePolicy(performance.now());
+ const item=document.createElement('div');item.className='bubble';
+ const text=document.createElement('span');text.textContent='Test message';
+ const foot=document.createElement('div');foot.className='bubble-foot';
+ const seen=document.createElement('button');seen.className='seen';
+ seen.textContent='Simulate Seen';
+ const hint=document.createElement('small');hint.textContent='30s if unread';
+ item.append(text);foot.append(seen,hint);item.append(foot);e('messages').append(item);
+ messages.add(item);
+ let timer=null;
+ const remove=()=>{
+   if(timer){clearTimeout(timer);messageTimers.delete(timer);timer=null;}
+   messages.delete(item);item.remove();
+ };
+ const plan=()=>{
+   if(timer){clearTimeout(timer);messageTimers.delete(timer);}
+   const delay=Math.max(0,policy.expiresAt()-performance.now());
+   timer=setTimeout(()=>{
+     messageTimers.delete(timer);
+     if(active&&generation===ownerGeneration)remove();
+   },delay);
+   messageTimers.add(timer);
+ };
+ seen.onclick=()=>{
+   if(!active||generation!==ownerGeneration||!policy.markSeen(performance.now()))return;
+   seen.remove();hint.textContent='Seen · disappears in 2s';plan();
+ };
+ plan();
+}
+async function deleteChat(){
+ if(!active||role!=='host')return;
+ const result=await api.deleteChat();
+ if(result.ok&&active&&role==='host'){clearMessages('Chat deleted');e('notice').textContent='Demo chat cleared on this device';}
+}
+e('start').onclick=start;
+e('end').onclick=()=>requestStop('Ended',api.stop);
+e('fail').onclick=()=>requestStop('Simulated failure',api.fail);
+e('message-btn').onclick=addMessage;
+e('delete').onclick=deleteChat;
+e('role').onchange=async()=>{
+ const next=e('role').value;
+ try{
+  const r=await api.setRole(next);
+  if(r.ok){role=r.role;clearMessages('Press Start to begin');draw();}
+  else e('role').value=role;
+ }catch{e('role').value=role;}
+};
+e('usb-btn').onclick=async()=>{const r=await api.folder();if(r.ok)e('usb-path').textContent=r.folder;e('notice').textContent=r.ok?'Folder selected':r.error;};
+e('usb-clear').onclick=async()=>{const r=await api.clearFolder();if(r.ok)e('usb-path').textContent='No folder selected';};
 api.onStop(s=>stop(s.reason));
-api.status().then(s=>{active=s.active;generation=s.generation;e('usb-path').textContent=s.folder||'None chosen';redraw();});
+api.status().then(s=>{
+  active=Boolean(s.active);generation=s.generation;role=s.role==='guest'?'guest':'host';
+  e('role').value=role;e('usb-path').textContent=s.folder||'No folder selected';draw();
+}).catch(()=>e('notice').textContent='App not ready');

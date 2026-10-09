@@ -1,20 +1,44 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'self'; media-src 'self' blob:; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
-<title>Private Session Dummy Preview</title>
-<link rel="stylesheet" href="style.css"><script defer src="renderer.js"></script></head>
-<body><div class="layout"><aside>
-<h2>◈ Private Session</h2><p class="soft">Development preview · v0.1</p>
-<div class="warning"><b>LOCAL TEST ONLY</b><p>No encryption, no remote connection. Use dummy data.</p></div>
-<h4>Planned authorized people</h4>
-<p>Developer / Tester<br><small>Builds app; tests only with consent</small></p>
-<p>Friend 2<br><small>May have multiple approved devices</small></p>
-<p>Friend 3<br><small>MacBook with external USB app</small></p>
-<p class="soft">These roles are mock labels, not real security controls.</p>
-</aside><main>
-<header><div><label>SESSION CONTROL</label><h1>Private conversation space</h1><p>Test safe session closing before implementing a real messenger.</p></div><span id="status">Inactive</span></header>
-<div class="grid"><section class="panel grow"><h3>Chat · dummy only</h3><p class="soft">30-second disappearing test messages</p><div id="messages"><p class="empty">Press Start demo to begin.</p></div><button id="message-btn" disabled>Add dummy message</button></section>
-<div class="side"><section class="panel"><h3>Camera / microphone</h3><div class="camera"><video muted autoplay playsinline id="camera-view"></video><p id="no-camera">Camera is OFF</p></div><div class="buttons"><button id="camera-btn" disabled>Test camera</button><button id="mic-btn" disabled>Test mic</button></div><p class="soft" id="sensor-status">No local sensor active.</p></section>
-<section class="panel"><h3>USB folder check</h3><p class="soft" id="usb-path">None chosen</p><div class="buttons"><button id="usb-btn">Choose test folder</button><button id="usb-clear">Clear</button></div><p class="soft">A folder-access test, NOT a secure physical USB guard.</p></section></div></div>
-<footer><div class="buttons"><button class="primary" id="start">Start demo</button><button class="danger" id="end" disabled>End session</button><button id="fail" disabled>Simulate failure</button></div><span id="notice">No active demo</span></footer>
+<title>Private Session Preview</title>
+<link rel="stylesheet" href="style.css">
+<script defer src="../core/message-policy.js"></script>
+<script defer src="renderer.js"></script></head>
+<body>
+<div class="layout">
+<aside>
+<h2>◈ Private Session</h2>
+<p class="soft">Preview 0.2</p>
+<div class="warning">LOCAL DEMO — not an encrypted messenger</div>
+<label for="role">Demo view</label>
+<select id="role"><option value="host">Host</option><option value="guest">Guest</option></select>
+<p class="soft tiny">Roles are simulated here.</p>
+</aside>
+<main>
+<header><div><h1>Private conversation</h1><p>Camera and microphone required</p></div><span id="status">Inactive</span></header>
+<div class="grid">
+<section class="panel grow">
+<div class="panel-top"><div><h3>Chat</h3><p class="soft">Seen + 2 seconds</p></div><button id="delete" class="subtle danger" hidden disabled>Delete chat</button></div>
+<div id="messages"><p class="empty">Press Start to begin.</p></div>
+<button id="message-btn" disabled>Add test message</button>
+</section>
+<div class="side">
+<section class="panel">
+<h3>Camera &amp; microphone</h3>
+<div class="camera"><video muted autoplay playsinline id="camera-view"></video><p id="no-camera">Camera OFF</p></div>
+<div class="mic-row"><span>Microphone</span><span id="mic-state">OFF</span></div>
+<div class="meter"><div id="mic-level"></div></div>
+<p class="soft tiny" id="sensor-status">Both required to start.</p>
+</section>
+<section class="panel">
+<h3>USB test</h3><p class="soft" id="usb-path">No folder selected</p>
+<div class="buttons"><button id="usb-btn">Choose folder</button><button id="usb-clear">Clear</button></div>
+</section>
+</div></div>
+<footer><div class="buttons">
+<button class="primary" id="start">Start</button>
+<button class="danger" id="end" disabled>End</button>
+<button id="fail" disabled>Test failure</button>
+</div><span id="notice">Ready</span></footer>
 </main></div></body></html>

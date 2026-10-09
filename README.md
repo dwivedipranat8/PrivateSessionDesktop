@@ -1,19 +1,20 @@
-# Private Session Desktop — v0.1 dummy preview
+# Private Session Desktop — v0.2 local preview
 
-**NOT A SECURE MESSENGER. No real E2EE, remote video/audio, peer pairing, real USB identity verification, or authenticated heartbeat. USE DUMMY DATA ONLY.**
+**DUMMY TEST ONLY. NOT AN ENCRYPTED OR NETWORKED MESSENGER.** Do not use actual conversations.
 
-This starter allows locally testing a session Start/End flow, 30-second dummy messages, local camera/mic preview, network-interface loss, a simulated failure, and basic test-folder disappearance. It includes GitHub cloud builds, so the developer's Windows PC does NOT need Node.js installed.
+## What changed
+- One Start action requests **both camera and microphone**. If either is denied/unavailable, the chat demo never starts. If either live track ends/mutes, the demo ends. The mic activity meter shows whether audio is being detected, without playback or recording.
+- Dummy message: press **Simulate Seen** to model a future authenticated peer read receipt. It is removed 2 seconds later, or by the original 30-second fallback, whichever happens first. This is NOT actual read detection; no other endpoint is connected.
+- Choose **Host** or **Guest** in the demo menu before Start. Host gets **Delete chat**; Guest has no delete control. Delete only clears **this local dummy UI**. Roles are mock selectors, NOT cryptographic authorization. A real version must enforce host authority via verified identities and authenticate deletion controls, and a remote offline device cannot acknowledge deletion.
+- Cleaner interface without numbered friend labels.
+- Optional USB-folder disappearance check remains an experiment, not trusted USB hardware presence verification.
 
-## Obtain the Windows dummy preview
-1. Open Actions in this private repository.
-2. Open the latest successful run of Build dummy preview.
-3. Under Artifacts download Windows-Dummy-Preview, extract the ZIP, and open its EXE.
-4. Windows may warn because this test EXE is unsigned. Do not disable Windows security globally. Do not share test builds as secure tools.
+## Get the updated Windows preview
+GitHub repo > Actions > latest green **Build dummy preview** run > Artifacts > **Windows-Dummy-Preview**. Download ZIP, extract and run EXE. The build is unsigned; do not disable antivirus or use this preview with sensitive information.
 
-Optional USB experiment: before Start, choose an empty folder on a spare USB; then Start and remove/eject the drive. This is a basic access test, not a dependable physical-removal or key-wipe guarantee. It writes no data to the drive.
+No local Node.js installation is required for GitHub-hosted builds.
 
-Roles for eventual design: developer/tester (not an automatic participant); Friend 2 (possibly several explicitly enrolled devices); Friend 3 (MacBook app from removable media). Their real chat will need separately authenticated E2EE and a reviewed session lifecycle. Nothing here can communicate between people yet.
+## Still unimplemented
+Peer connections, authenticated E2EE, real read receipts, networked host-only controls, real USB physical presence monitor and secure fail-closed implementation, signed Mac release, multi-device enrollment, secure media transport, and security review. Do not share as secure software.
 
-**Limitations:** no screenshot blocking; no secure USB monitor; no remote chat or media; no independent audit. OS/kernel freeze can defeat shutdown timers. Windows 10 22H2 may be outside normal security support; do not deploy the eventual sensitive-use app there without supported security updates.
-
-The separate PDF development guide is a specification, not proof of security. Begin with dummy experiments only.
+A developer/testing identity must not have a backdoor into any future conversations. Each authorized device must receive a separate approved identity. Real two-endpoint mandatory camera/mic must require **independent informed consent** on both endpoints.

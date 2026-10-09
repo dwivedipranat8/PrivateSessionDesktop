@@ -1,9 +1,9 @@
 {
   "name": "private-session-dummy",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "license": "UNLICENSED",
-  "description": "Dummy-only local private session UI",
+  "description": "Consent-first local demo with read timer and host-only demo clearing",
   "main": "app/main.cjs",
   "scripts": {
     "start": "electron .",
