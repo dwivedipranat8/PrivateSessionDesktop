@@ -48,7 +48,7 @@ export async function createDesktopChat({
  }
  function guard(){
   if(ended||!client||!client.leaseHealthy||!client.connected||!peerLease?.active){
-   if(client?.connected&&peerLease&&!peerLease.active)fail('Peer heartbeat not current');
+   if(client?.connected&&peerLease&&['protected','expired'].includes(peerLease.phase))fail('Peer heartbeat not current');
    return false;
   }
   return true;

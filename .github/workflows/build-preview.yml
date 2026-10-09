@@ -90,7 +90,10 @@ jobs:
       - name: Install Noise integration packages
         working-directory: crypto-probe
         run: npm install --no-audit --no-fund
-      - name: Verify dummy authenticated Noise stream
+      - name: Install restricted relay for real account-lease integration tests
+        working-directory: relay-service
+        run: npm install --no-audit --no-fund
+      - name: Verify password-derived pinned Noise, relay-lease and real text flow
         working-directory: crypto-probe
         run: npm test
 
