@@ -187,8 +187,8 @@ function handlePeerEvent(event){
   const item=messages.get(event.id);item?.bubble.remove();messages.delete(event.id);
  }
  if(event.type==='rtc-signal')void acceptRtcSignal(event.frame);
- if(event.type==='conceal'){clearMessages('Session verification delayed');chatReady=false;draw();}
- if(event.type==='cleared'){clearMessages('Session cleared');chatReady=false;draw();}
+ if(event.type==='conceal'){clearMessages('Session verification delayed');stopMedia();chatReady=false;draw();}
+ if(event.type==='cleared'){clearMessages('Session cleared');stopMedia();chatReady=false;draw();}
  if(event.type==='closed')void terminate('Authenticated session ended',api.stop);
 }
 async function setupRtc(){

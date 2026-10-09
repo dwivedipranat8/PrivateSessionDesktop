@@ -55,6 +55,11 @@ function stop(reason){
  // be discarded and its tracks stopped after lock, sleep, USB loss or End.
  mediaDeadline=0;
  authEpoch++;
+ // Detach and revoke live transport BEFORE wiping the unlocked identity.
+ // Awaiting teardown must never allow a stale callback to restore a session.
+ const previous=liveChat;
+ liveChat=null;connectingPeer=false;
+ try{void previous?.close();}catch{}
  demo.end(reason);
  wipeProfile();
  const status={...demo.status(),reason};
@@ -179,9 +184,12 @@ app.whenReady().then(()=>{
      approvedPeerId:config.peerId,sessionId:config.sessionId,
      onEvent:info=>{
       if(epoch!==authEpoch)return;
+      // Hide in main process before relying on renderer IPC: a crashed or
+      // delayed renderer must not leave the sensitive chat visible.
+      if(['cleared','conceal','closed'].includes(info.type)&&win&&!win.isDestroyed())win.hide();
       if(win&&!win.isDestroyed())win.webContents.send('p:peer-event',info);
-      if(info.type==='closed'&&liveChat===candidate)
-       emergencyQuit('Approved peer connection ended');
+      if((info.type==='closed'||info.type==='conceal')&&liveChat===candidate)
+       emergencyQuit('Approved peer security/liveness lost');
      }
     });
     if(epoch!==authEpoch||!demo.active){await candidate.close();throw Error('Session cancelled');}

@@ -91,3 +91,21 @@ test('Host camera/mic is optional but an explicit opt-in is supported',()=>{
  assert.match(app,/\['guest','host'\]\.includes\(role\)/);
  assert.match(ui,/e\('host-share'\)\.checked/);
 });
+
+test('stop detaches real Noise client before profile wipe; late callbacks cannot resurrect session',()=>{
+ const code=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
+ const stop=code.slice(code.indexOf('function stop(reason){'),code.indexOf('function isAvailable',code.indexOf('function stop(reason){')));
+ assert.match(stop,/authEpoch\+\+/);
+ assert.match(stop,/const previous=liveChat;/);
+ assert.match(stop,/liveChat=null;connectingPeer=false;/);
+ assert.match(stop,/previous\?\.close\(\)/);
+ assert.ok(stop.indexOf('previous?.close()')<stop.indexOf('wipeProfile()'));
+});
+test('peer remote clear and heartbeat conceal hide before renderer event and stop media',()=>{
+ const main=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
+ const renderer=fs.readFileSync(path.join(__dirname,'../ui/renderer.js'),'utf8');
+ assert.match(main,/\\['cleared','conceal','closed'\\]/);
+ assert.match(main,/win\.hide\(\)/);
+ assert.match(renderer,/event\.type==='cleared'\\)\\{clearMessages\\('Session cleared'\\);stopMedia\\(\\)/);
+ assert.match(renderer,/event\.type==='conceal'\\)\\{clearMessages\\('Session verification delayed'\\);stopMedia\\(\\)/);
+});
