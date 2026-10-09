@@ -9,7 +9,9 @@
     "start": "electron .",
     "test": "node --test tests/*.test.cjs",
     "build:win": "electron-builder --win portable --x64 --publish never",
-    "build:mac": "electron-builder --mac zip --x64 --arm64 --publish never"
+    "build:mac": "electron-builder --mac zip --x64 --arm64 --publish never",
+    "build:win:main": "electron-builder --win portable --x64 --publish never --config.extraMetadata.privateSessionVariant=main --config.directories.output=dist/main --config.win.artifactName=PrivateSession-Main-${arch}.${ext}",
+    "build:win:protected": "electron-builder --win portable --x64 --publish never --config.extraMetadata.privateSessionVariant=protected --config.directories.output=dist/protected --config.win.artifactName=PrivateSession-Protected-${arch}.${ext}"
   },
   "devDependencies": {
     "electron": "44.6.0",

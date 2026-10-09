@@ -4,6 +4,17 @@ const fs=require('node:fs'),path=require('node:path');
 const {pathToFileURL}=require('node:url');
 const {DemoSession}=require('../core/session.cjs');
 const demo=new DemoSession();
+const enforcedVariant=require('../package.json').privateSessionVariant||null;
+function expectedAccountRole(){
+ if(enforcedVariant==='main')return 'host';
+ if(enforcedVariant==='protected')return 'protected';
+ return null;
+}
+function approvedSetupLocation(location){
+ const required=expectedAccountRole();
+ return !required||(required==='host'&&location==='local')||(required==='protected'&&location==='portable');
+}
+
 let win=null,folder=null,role=null,profile=null,profileFileSignature=null,mediaDeadline=0,interval=null,lastUnlockAttempt=0,authEpoch=0;
 let modulePromise=null,liveChat=null,connectingPeer=false;
 function profileLibrary(){
@@ -26,7 +37,10 @@ function portableProfilePath(){
  return path.join(path.dirname(executable),'PrivateSession.identity.enc.json');
 }
 function knownPaths(){
- const result=[hostProfilePath(),portableProfilePath()].filter(Boolean);
+ const required=expectedAccountRole();
+ const result=(required==='host'?[hostProfilePath()]:
+   required==='protected'?[portableProfilePath()]:
+   [hostProfilePath(),portableProfilePath()]).filter(Boolean);
  return [...new Set(result)];
 }
 function profileExists(p){try{return fs.statSync(p).isFile();}catch{return false;}}
@@ -112,7 +126,8 @@ app.whenReady().then(()=>{
  });
  register('account-setup',async(location,passphrase)=>{
    if(profile||demo.active||Date.now()<mediaDeadline||
-      !['local','portable'].includes(location))return {ok:false,error:'Setup unavailable'};
+      !['local','portable'].includes(location)||!approvedSetupLocation(location))
+    return {ok:false,error:'This installer only supports its assigned profile'};
    if(typeof passphrase!=='string'||Buffer.byteLength(passphrase,'utf8')<16)
     return {ok:false,error:'Use a passphrase of at least 16 characters'};
    const target=location==='local'?hostProfilePath():portableProfilePath();
@@ -125,6 +140,10 @@ app.whenReady().then(()=>{
     if(location==='local')fs.mkdirSync(path.dirname(target),{recursive:true,mode:0o700});
     await lib.createLocalProfile({target,role:location==='local'?'host':'protected',passphrase});
     const result=await lib.unlockLocalProfile({targets:[target],passphrase});
+    if(expectedAccountRole()&&result.role!==expectedAccountRole()){
+     lib.clearUnlockedProfile(result);
+     return {ok:false,error:'Wrong identity for this installer'};
+    }
     if(epoch!==authEpoch){lib.clearUnlockedProfile(result);return {ok:false,error:'Setup cancelled'};}
     profile=result;role=result.role==='protected'?'guest':'host';
     folder=result.role==='protected'?path.dirname(result.profilePath):null;
@@ -142,6 +161,10 @@ app.whenReady().then(()=>{
    try{
     const lib=await profileLibrary();
     const result=await lib.unlockLocalProfile({targets:knownPaths(),passphrase});
+    if(expectedAccountRole()&&result.role!==expectedAccountRole()){
+     lib.clearUnlockedProfile(result);
+     return {ok:false,error:'Wrong identity for this installer'};
+    }
     if(epoch!==authEpoch){lib.clearUnlockedProfile(result);return {ok:false,error:'Unlock cancelled'};}
     profile=result;role=result.role==='protected'?'guest':'host';
     folder=result.role==='protected'?path.dirname(result.profilePath):null;

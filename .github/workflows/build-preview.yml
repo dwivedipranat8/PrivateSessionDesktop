@@ -38,7 +38,19 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --no-audit --no-fund
-      - run: npm run build:win
+      - name: Legacy main-branch demo
+        if: github.ref == 'refs/heads/main'
+        run: npm run build:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Build Main installer with locked identity
+        if: github.event_name == 'workflow_dispatch' && inputs.verify_packages && github.ref == 'refs/heads/development/security-engine'
+        run: npm run build:win:main
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Build Protected installer with locked identity
+        if: github.event_name == 'workflow_dispatch' && inputs.verify_packages && github.ref == 'refs/heads/development/security-engine'
+        run: npm run build:win:protected
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - uses: actions/upload-artifact@v4
@@ -51,8 +63,15 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: github.event_name == 'workflow_dispatch' && inputs.verify_packages && github.ref == 'refs/heads/development/security-engine'
         with:
-          name: Windows-EXPERIMENTAL-NOT-SECURE
-          path: dist/*.exe
+          name: PrivateSession-Main-EXPERIMENTAL
+          path: dist/main/*.exe
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'workflow_dispatch' && inputs.verify_packages && github.ref == 'refs/heads/development/security-engine'
+        with:
+          name: PrivateSession-Protected-EXPERIMENTAL
+          path: dist/protected/*.exe
           if-no-files-found: error
           retention-days: 7
 
