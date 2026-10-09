@@ -1,7 +1,7 @@
 name: Build dummy preview
 on:
   push:
-    branches: [main]
+    branches: [main, development/security-engine]
   workflow_dispatch:
     inputs:
       build_mac:
@@ -23,6 +23,7 @@ jobs:
       - run: node --check app/preload.cjs
       - run: node --check ui/renderer.js
   windows:
+    if: github.ref == 'refs/heads/main'
     needs: test
     runs-on: windows-latest
     steps:

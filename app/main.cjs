@@ -42,6 +42,7 @@ app.whenReady().then(()=>{
    return {ok:true};
  });
  register('start',()=>{
+   if(process.platform==='win32' && !win?.isContentProtected())return {ok:false,error:'Window capture exclusion unavailable'};
    if(demo.active)return {ok:false,error:'Session already active'};
    if(Date.now()>=mediaDeadline)return {ok:false,error:'Camera and microphone are required'};
    const check=guardReady();if(!check.ok){mediaDeadline=0;return check;}
@@ -75,6 +76,9 @@ app.whenReady().then(()=>{
      preload:path.join(__dirname,'preload.cjs'),sandbox:true,contextIsolation:true,
      nodeIntegration:false,webSecurity:true,devTools:false,backgroundThrottling:false}
  });
+ // Electron applies Windows WDA_EXCLUDEFROMCAPTURE before first app content draw.
+ // macOS NSWindowSharingNone does not block newer ScreenCaptureKit capture.
+ try{win.setContentProtection(true);}catch{console.error('Window capture exclusion unavailable');}
  win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
  win.webContents.on('will-navigate',e=>e.preventDefault());
  win.webContents.on('render-process-gone',()=>stop('App window stopped'));
