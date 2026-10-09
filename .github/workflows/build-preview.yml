@@ -109,6 +109,8 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Validate opt-in Mac screenshot restriction test profile
+        run: plutil -lint capture-pilot/macos/ScreenCaptureRestriction.mobileconfig
       - name: Compile native volume guard without producing a release package
         run: swiftc -O -framework DiskArbitration native/macos/VolumeGuard.swift -o /tmp/PrivateSessionVolumeGuard
 
