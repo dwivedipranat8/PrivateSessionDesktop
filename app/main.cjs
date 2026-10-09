@@ -86,7 +86,7 @@ function register(name,fn){
 }
 app.whenReady().then(()=>{
  const volatileSession=session.fromPartition('local-dummy-preview');
- const canUseMedia=wc=>!!profile&&role==='guest'&&!!win&&!win.isDestroyed()&&wc?.id===win.webContents.id &&
+ const canUseMedia=wc=>!!profile&&['guest','host'].includes(role)&&!!win&&!win.isDestroyed()&&wc?.id===win.webContents.id &&
     (demo.active||Date.now()<mediaDeadline);
  volatileSession.setPermissionRequestHandler((wc,permission,callback)=>{
    callback(permission==='media'&&canUseMedia(wc));

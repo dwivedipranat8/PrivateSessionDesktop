@@ -37,9 +37,10 @@ test('first-use password field stays visible and normal role dropdown is absent'
  assert.equal(html.includes('id="role"'),false);
  assert.match(html,/id="passphrase"/);
 });
-test('protected own live video preview cannot render in UI',()=>{
+test('protected self-preview is absent while remote encrypted video has an explicit player',()=>{
  const html=fs.readFileSync(path.join(__dirname,'../ui/index.html'),'utf8');
- assert.equal(html.includes('<video'),false);
+ assert.equal(html.includes('id="camera-view"'),false);
+ assert.match(html,/id="remote-video"/);
  assert.match(html,/id="media-indicator"/);
 });
 
@@ -82,4 +83,11 @@ test('all real peer operations stay in main process and require authorized sessi
  assert.match(app,/privateKeyBytes:profile\.identity\.privateKeyBytes/);
  assert.match(app,/Mac protected capture restriction not independently verified/);
  assert.match(app,/epoch!==authEpoch/);
+});
+
+test('Host camera/mic is optional but an explicit opt-in is supported',()=>{
+ const app=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
+ const ui=fs.readFileSync(path.join(__dirname,'../ui/renderer.js'),'utf8');
+ assert.match(app,/\['guest','host'\]\.includes\(role\)/);
+ assert.match(ui,/e\('host-share'\)\.checked/);
 });
