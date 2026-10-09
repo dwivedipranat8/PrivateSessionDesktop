@@ -101,11 +101,11 @@ test('stop detaches real Noise client before profile wipe; late callbacks cannot
  assert.match(stop,/previous\?\.close\(\)/);
  assert.ok(stop.indexOf('previous?.close()')<stop.indexOf('wipeProfile()'));
 });
-test('peer remote clear and heartbeat conceal hide before renderer event and stop media',()=>{
+test('remote Clear and heartbeat failure hide screen and stop media',()=>{
  const main=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
  const renderer=fs.readFileSync(path.join(__dirname,'../ui/renderer.js'),'utf8');
- assert.match(main,/\\['cleared','conceal','closed'\\]/);
- assert.match(main,/win\.hide\(\)/);
- assert.match(renderer,/event\.type==='cleared'\\)\\{clearMessages\\('Session cleared'\\);stopMedia\\(\\)/);
- assert.match(renderer,/event\.type==='conceal'\\)\\{clearMessages\\('Session verification delayed'\\);stopMedia\\(\\)/);
+ assert.ok(main.includes("['cleared','conceal','closed'].includes(info.type)"));
+ assert.ok(main.includes("win.hide()"));
+ assert.ok(renderer.includes("clearMessages('Session cleared');stopMedia();chatReady=false"));
+ assert.ok(renderer.includes("clearMessages('Session verification delayed');stopMedia();chatReady=false"));
 });
