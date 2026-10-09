@@ -51,6 +51,15 @@ test('late encrypted account-unlock callback cannot reactivate access after shut
 });
 test('removed encrypted profile initiates program shutdown even before session Start',()=>{
  const main=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
- assert.match(main,/profile&&role==='guest'&&!profileExists\(profile\.profilePath\)/);
+ assert.match(main,/profile&&role==='guest'&&\(!profileFileSignature/);
  assert.match(main,/Encrypted profile drive removed/);
+});
+
+test('emergency loss conceals window and terminates program without renderer ACK',()=>{
+ const main=fs.readFileSync(path.join(__dirname,'../app/main.cjs'),'utf8');
+ const emergency=main.slice(main.indexOf('function emergencyQuit(reason)'),main.indexOf('function wipeProfile(){'));
+ assert.match(emergency,/win\.hide\(\)/);
+ assert.match(emergency,/stop\(reason\)/);
+ assert.match(emergency,/app\.exit\(0\)/);
+ assert.match(main,/fileSignature\(profile\.profilePath\)!==profileFileSignature/);
 });

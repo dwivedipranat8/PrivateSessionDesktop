@@ -4,7 +4,7 @@ const fs=require('node:fs'),path=require('node:path');
 const {pathToFileURL}=require('node:url');
 const {DemoSession}=require('../core/session.cjs');
 const demo=new DemoSession();
-let win=null,folder=null,role=null,profile=null,mediaDeadline=0,interval=null,lastUnlockAttempt=0,authEpoch=0;
+let win=null,folder=null,role=null,profile=null,profileFileSignature=null,mediaDeadline=0,interval=null,lastUnlockAttempt=0,authEpoch=0;
 let modulePromise=null;
 function profileLibrary(){
  if(!modulePromise)modulePromise=import(pathToFileURL(path.join(__dirname,'../crypto-probe/src/local-profiles.mjs')).href);
@@ -27,9 +27,22 @@ function knownPaths(){
 }
 function profileExists(p){try{return fs.statSync(p).isFile();}catch{return false;}}
 function accountSummary(){return {registered:knownPaths().some(profileExists),unlocked:!!profile};}
+function fileSignature(file){
+ try{
+  const info=fs.statSync(file);
+  if(!info.isFile())return null;
+  return [info.dev,info.ino,info.size,info.mtimeMs].join(':');
+ }catch{return null;}
+}
+function emergencyQuit(reason){
+ // Main-process concealment does not depend on a possibly stalled renderer.
+ if(win&&!win.isDestroyed())win.hide();
+ stop(reason);
+ app.exit(0);
+}
 function wipeProfile(){
  try{profile?.identity?.privateKeyBytes?.fill(0);}catch{}
- profile=null;role=null;folder=null;
+ profile=null;role=null;folder=null;profileFileSignature=null;
 }
 
 function stop(reason){
@@ -53,7 +66,9 @@ function guardReady(){
  // verified here. Real protected profile must be bound to enrolled USB.
  if(!profile)return {ok:false,error:'Unlock an encrypted local profile first'};
  if(role==='guest'&&!folder)return {ok:false,error:'Protected profile must be on an available volume'};
- if(role==='guest'&&!profileExists(profile.profilePath))return {ok:false,error:'Encrypted device profile removed'};
+ if(role==='guest'&&(!profileExists(profile.profilePath)||
+     !profileFileSignature||fileSignature(profile.profilePath)!==profileFileSignature))
+  return {ok:false,error:'Encrypted device profile missing or changed'};
  if(folder&&!isAvailable(folder))return {ok:false,error:'Test USB folder unavailable'};
  if(!net.isOnline())return {ok:false,error:'Network reports offline'};
  return {ok:true};
@@ -95,6 +110,7 @@ app.whenReady().then(()=>{
     if(epoch!==authEpoch){lib.clearUnlockedProfile(result);return {ok:false,error:'Setup cancelled'};}
     profile=result;role=result.role==='protected'?'guest':'host';
     folder=result.role==='protected'?path.dirname(result.profilePath):null;
+    profileFileSignature=result.role==='protected'?fileSignature(result.profilePath):null;
     return {ok:true,role,registered:true,unlocked:true};
    }catch{return {ok:false,error:'Profile setup failed; check drive and password, do not overwrite damaged profiles'};}
  });
@@ -162,18 +178,19 @@ app.whenReady().then(()=>{
  win.on('close',()=>stop('Window closed'));
  win.loadFile(path.join(__dirname,'../ui/index.html'));
  win.once('ready-to-show',()=>{if(win&&!win.isDestroyed())win.show();});
- powerMonitor.on('lock-screen',()=>{stop('Device locked');app.quit();});
- powerMonitor.on('suspend',()=>{stop('Device sleeping');app.quit();});
+ powerMonitor.on('lock-screen',()=>emergencyQuit('Device locked'));
+ powerMonitor.on('suspend',()=>emergencyQuit('Device sleeping'));
  interval=setInterval(()=>{
    // Removal of the required encrypted profile ends access even before Start.
-   if(profile&&role==='guest'&&!profileExists(profile.profilePath)){
-    stop('Encrypted profile drive removed');app.quit();return;
+   if(profile&&role==='guest'&&(!profileFileSignature||
+     fileSignature(profile.profilePath)!==profileFileSignature)){
+    emergencyQuit('Encrypted profile drive removed or changed');return;
    }
    if(!demo.active)return;
    const result=guardReady();
    if(!result.ok){
-    stop(result.error);
-    if(/offline|removed|unavailable/i.test(result.error))app.quit();
+    if(/offline|removed|unavailable|changed/i.test(result.error))emergencyQuit(result.error);
+    else stop(result.error);
    }
  },500);
 });
