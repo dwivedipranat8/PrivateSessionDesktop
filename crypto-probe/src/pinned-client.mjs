@@ -34,7 +34,7 @@ export async function createPinnedClient({privateKey,sessionId,onFrame,onSession
   connectionEncrypters:[noise()],streamMuxers:[yamux()],
   services:{identify:identify()}
  });
- let approvedPeer=null,stream=null,framed=null,writeQueue=Promise.resolve(),ended=false,relayVerified=false,joinedRelayId=null,
+ let approvedPeer=null,stream=null,framed=null,writeQueue=Promise.resolve(),ended=false,relayVerified=false,joinedRelayId=null,joinedRelayPeer=null,
   lease=null;
  function rejectPeerConnection(streamInput,reason){
   if(ended)return;
@@ -81,7 +81,7 @@ export async function createPinnedClient({privateKey,sessionId,onFrame,onSession
  }
  async function serverOperation(protocol,payload){
   if(!relayVerified||!joinedRelayId||ended)throw Error('Pinned relay connection required');
-  const stream=await node.dialProtocol(joinedRelayId,protocol,{signal:AbortSignal.timeout(8000)});
+  const stream=await node.dialProtocol(joinedRelayPeer,protocol,{signal:AbortSignal.timeout(8000)});
   try{
    const framed=lpStream(stream,{maxDataLength:16000,maxBufferSize:17000});
    await framed.write(new TextEncoder().encode(JSON.stringify(payload)),{signal:AbortSignal.timeout(8000)});
@@ -146,7 +146,7 @@ export async function createPinnedClient({privateKey,sessionId,onFrame,onSession
    if(conn.remotePeer.toString()!==relayId){
     await conn.close();throw Error('Unapproved relay identity');
    }
-   joinedRelayId=relayId;relayVerified=true;
+   joinedRelayId=relayId;joinedRelayPeer=conn.remotePeer;relayVerified=true;
    return true;
   },
   async connect(remoteCircuitAddress){
