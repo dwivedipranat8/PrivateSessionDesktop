@@ -138,3 +138,16 @@ test('authenticated signalling send returning false is NOT success',async()=>{
  await assert.rejects(c.prepare({localStream:s,iceServers:[{urls:'turns:relay.example.org',username:'u',credential:'p'}],initiator:true}));
  assert.equal(s.getTracks().every(t=>t.readyState==='ended'),true);
 });
+
+test('media cleanup exception cannot suppress session stop or other track disposal',async()=>{
+ const f=fake(),s=media(),seen=[];
+ const c=new RTCCall({sessionId:SESSION,localDeviceId:LOCAL,peerDeviceId:PEER,
+  sendAuthenticated:async()=>{},rtcCtor:f.RTC,
+  onRemoteMedia:()=>{throw Error('Broken UI callback');},
+  onStop:why=>seen.push(why)});
+ await c.prepare({localStream:s,iceServers:[{urls:'turns:relay.example.org',username:'u',credential:'p'}]});
+ assert.doesNotThrow(()=>c.end('USB removed'));
+ assert.deepEqual(seen,['USB removed']);
+ assert.ok(s.getTracks().every(track=>track.readyState==='ended'));
+ assert.equal(c.pc,null);
+});

@@ -154,11 +154,21 @@
   end(reason='Ended'){
    if(this.closed)return;
    this.closed=true;this.ready=false;
-   try{if(this.pc){this.pc.ontrack=null;this.pc.onicecandidate=null;this.pc.onconnectionstatechange=null;this.pc.close();}}catch{}
-   // Caller is responsible for the shared capture stream; close it on every end.
-   try{this.localStream?.getTracks().forEach(t=>t.stop());}catch{}
-   this.onRemoteMedia([],null);this.onStop(reason);
+   const pc=this.pc,stream=this.localStream;
+   // Release references before invoking callbacks that may throw.
    this.pc=null;this.localStream=null;this.pendingCandidates=[];
+   try{
+    if(pc){
+     pc.ontrack=null;pc.onicecandidate=null;pc.onconnectionstatechange=null;
+     try{pc.close();}catch{}
+    }
+   }catch{}
+   try{
+    // Attempt every track even when one track's stop handler fails.
+    for(const track of stream?.getTracks?.()||[]){try{track.stop();}catch{}}
+   }catch{}
+   try{this.onRemoteMedia([],null);}catch{}
+   try{this.onStop(reason);}catch{}
   }
  }
  if(typeof module!=='undefined'&&module.exports)module.exports={RTCCall};

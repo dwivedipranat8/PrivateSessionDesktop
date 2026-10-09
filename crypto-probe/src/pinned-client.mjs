@@ -59,7 +59,8 @@ export async function createPinnedClient({privateKey,sessionId,onFrame,onSession
      if(!validateFrame(frame)||frame.sessionId!==sessionId||frame.sender!==sourcePeer)
       throw Error('Unapproved version, peer or session');
      // Await failure handlers. Never accept another frame after async denial.
-     await onFrame(frame,{noiseRemotePeerId:sourcePeer});
+     const accepted=await onFrame(frame,{noiseRemotePeerId:sourcePeer});
+     if(accepted!==true)throw Error('Session frame rejected');
      if(ended)return;
     }
    }catch{

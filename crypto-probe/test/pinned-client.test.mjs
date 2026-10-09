@@ -17,9 +17,9 @@ test('two pinned, encrypted relay clients can exchange only session-bound dummy 
   services:{identify:identify(),relay:circuitRelayServer()}
  });
  const received=[],a=await createPinnedClient({privateKey:await generateKeyPair('Ed25519'),
-   sessionId,onFrame:(frame,meta)=>received.push({side:'a',frame,meta})});
+   sessionId,onFrame:(frame,meta)=>{received.push({side:'a',frame,meta});return true;}});
  const b=await createPinnedClient({privateKey:await generateKeyPair('Ed25519'),
-   sessionId,onFrame:(frame,meta)=>received.push({side:'b',frame,meta})});
+   sessionId,onFrame:(frame,meta)=>{received.push({side:'b',frame,meta});return true;}});
  const relayAddr=relay.getMultiaddrs().find(x=>x.toString().includes('127.0.0.1'));
  assert.ok(relayAddr);
  try{
